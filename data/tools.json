@@ -16,7 +16,7 @@
       "version": "2026.11.19",
       "file": "forge-grafika-2026.11.19.tar.gz",
       "size": 29865829,
-      "sha256": "6dc773152be892eb79ecb45d7d2a86e71718fda12d8bd3b60435ef0b7dda012f"
+      "sha256": "0303693cbb8b776f65345fcbcc37529ff575d4aa33ed5131020bdbd623988ea5"
     },
     {
       "id": "zvuk",
@@ -32,7 +32,7 @@
       "version": "2026.11.19",
       "file": "forge-zvuk-2026.11.19.tar.gz",
       "size": 326105,
-      "sha256": "23a6303a37a2e97c66e21961cd64c284f0c00115a13ad2ed66e0618ccd8cac61"
+      "sha256": "53df766524f38d8ab452ee5a2b12410bc13c673bc13fcf909802423025531e69"
     },
     {
       "id": "montazh",
@@ -49,7 +49,7 @@
       "version": "2026.11.19",
       "file": "forge-montazh-2026.11.19.tar.gz",
       "size": 269218,
-      "sha256": "20b213671f4d80f74839205af6ecdc9f98ee7ba5e207fef806243cc343d339f4"
+      "sha256": "35257c458e43953206befff426b91ec6735af57b1761444cd5cc42260d893dca"
     },
     {
       "id": "pages",
@@ -65,7 +65,7 @@
       "version": "2026.11.19",
       "file": "forge-pages-2026.11.19.tar.gz",
       "size": 977347,
-      "sha256": "f06a68b0dea4f573ab78f3c4c25896e3e81f77fd2f13cd3ced5ed541762fc06b"
+      "sha256": "46db2feeabb17479bad4e77577ecba62c80ca8c8dbc6b9d99dd489df34c895be"
     },
     {
       "id": "fony",
@@ -81,7 +81,7 @@
       "version": "2026.11.19",
       "file": "forge-fony-2026.11.19.tar.gz",
       "size": 246156,
-      "sha256": "df0c4fdb9de9b6994aef05f288e52918b45c9c52e732e6032445c4ef8794fcb9"
+      "sha256": "4adb474dd4667292e82104b63926593cd2e9678a414e8dd943c202b4a3a16d43"
     }
   ]
 }
