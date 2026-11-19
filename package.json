@@ -1,0 +1,54 @@
+{
+  "name": "twenty-words-studio",
+  "productName": "Twenty Words Studio",
+  "version": "0.4.0",
+  "description": "Рабочее приложение команды Twenty Words Studio",
+  "main": "src/main/main.js",
+  "author": "Twenty Words Studio",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win",
+    "release": "node scripts/release.js",
+    "pack-tools": "node scripts/pack-tools.js"
+  },
+  "build": {
+    "appId": "studio.twentywords.studio",
+    "productName": "Twenty Words Studio",
+    "files": [
+      "src/**/*",
+      "data/config.json",
+      "data/tools.json",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "createDesktopShortcut": true,
+      "shortcutName": "Twenty Words Studio",
+      "artifactName": "Twenty-Words-Studio-Setup.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Yourssugar",
+        "repo": "twenty-words-studio",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^45.3.4",
+    "electron-builder": "^26.18.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.0"
+  }
+}

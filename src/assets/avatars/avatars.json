@@ -1,0 +1,68 @@
+{
+  "avatars": [
+    {
+      "id": "robot",
+      "file": "robot.webp"
+    },
+    {
+      "id": "cat",
+      "file": "cat.webp"
+    },
+    {
+      "id": "fox",
+      "file": "fox.webp"
+    },
+    {
+      "id": "owl",
+      "file": "owl.webp"
+    },
+    {
+      "id": "ghost",
+      "file": "ghost.webp"
+    },
+    {
+      "id": "astronaut",
+      "file": "astronaut.webp"
+    },
+    {
+      "id": "wizard",
+      "file": "wizard.webp"
+    },
+    {
+      "id": "knight",
+      "file": "knight.webp"
+    },
+    {
+      "id": "dragon",
+      "file": "dragon.webp"
+    },
+    {
+      "id": "alien",
+      "file": "alien.webp"
+    },
+    {
+      "id": "panda",
+      "file": "panda.webp"
+    },
+    {
+      "id": "frog",
+      "file": "frog.webp"
+    },
+    {
+      "id": "octopus",
+      "file": "octopus.webp"
+    },
+    {
+      "id": "bunny",
+      "file": "bunny.webp"
+    },
+    {
+      "id": "pumpkin",
+      "file": "pumpkin.webp"
+    },
+    {
+      "id": "snowman",
+      "file": "snowman.webp"
+    }
+  ]
+}

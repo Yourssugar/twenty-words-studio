@@ -1,0 +1,87 @@
+{
+  "base": "https://github.com/Yourssugar/twenty-words-studio/releases/download/tools-2026.11.19",
+  "tools": [
+    {
+      "id": "grafika",
+      "name": "Графика",
+      "desc": "Обложки, превью для YouTube, сторис, открытки и QR-коды нужного размера. Внутри нейросеть для удаления фона, работает без интернета.",
+      "entry": "grafika/",
+      "paths": [
+        "grafika",
+        "fony/fony-engine.js",
+        "HTML-CSS-JS/engine.js",
+        "HTML-CSS-JS/editor.css",
+        "i18n-forge.js"
+      ],
+      "version": "2026.11.19",
+      "file": "forge-grafika-2026.11.19.tar.gz",
+      "size": 29865829,
+      "sha256": "6dc773152be892eb79ecb45d7d2a86e71718fda12d8bd3b60435ef0b7dda012f"
+    },
+    {
+      "id": "zvuk",
+      "name": "Звук",
+      "desc": "Обрезать песню, сделать рингтон, записать голос, мастеринг с пресетами.",
+      "entry": "zvuk/",
+      "paths": [
+        "zvuk",
+        "HTML-CSS-JS/engine.js",
+        "HTML-CSS-JS/editor.css",
+        "i18n-forge.js"
+      ],
+      "version": "2026.11.19",
+      "file": "forge-zvuk-2026.11.19.tar.gz",
+      "size": 326105,
+      "sha256": "23a6303a37a2e97c66e21961cd64c284f0c00115a13ad2ed66e0618ccd8cac61"
+    },
+    {
+      "id": "montazh",
+      "name": "Монтаж",
+      "desc": "Короткий ролик из фото и видео: переходы, надписи, музыка, видео файлом.",
+      "entry": "montazh/",
+      "paths": [
+        "montazh",
+        "fony/fony-engine.js",
+        "HTML-CSS-JS/engine.js",
+        "HTML-CSS-JS/editor.css",
+        "i18n-forge.js"
+      ],
+      "version": "2026.11.19",
+      "file": "forge-montazh-2026.11.19.tar.gz",
+      "size": 269218,
+      "sha256": "20b213671f4d80f74839205af6ecdc9f98ee7ba5e207fef806243cc343d339f4"
+    },
+    {
+      "id": "pages",
+      "name": "Страницы",
+      "desc": "Визитка, приглашение, меню, все ссылки в одном месте. Скачивается файлом.",
+      "entry": "HTML-CSS-JS/",
+      "paths": [
+        "HTML-CSS-JS",
+        "p",
+        "img",
+        "i18n-forge.js"
+      ],
+      "version": "2026.11.19",
+      "file": "forge-pages-2026.11.19.tar.gz",
+      "size": 977347,
+      "sha256": "f06a68b0dea4f573ab78f3c4c25896e3e81f77fd2f13cd3ced5ed541762fc06b"
+    },
+    {
+      "id": "fony",
+      "name": "Фоны",
+      "desc": "Аврора, волны, топография, конфетти. Картинкой, SVG или кодом CSS, в том числе плиткой для сайта.",
+      "entry": "fony/",
+      "paths": [
+        "fony",
+        "HTML-CSS-JS/engine.js",
+        "HTML-CSS-JS/editor.css",
+        "i18n-forge.js"
+      ],
+      "version": "2026.11.19",
+      "file": "forge-fony-2026.11.19.tar.gz",
+      "size": 246156,
+      "sha256": "df0c4fdb9de9b6994aef05f288e52918b45c9c52e732e6032445c4ef8794fcb9"
+    }
+  ]
+}

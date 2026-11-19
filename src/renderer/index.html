@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+  <title>Twenty Words Studio</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Вход -->
+  <section id="auth" class="auth" hidden>
+    <div class="auth-card">
+      <div class="auth-brand">
+        <img src="../assets/icon.png" alt="">
+        <div>
+          <div class="auth-title">Twenty Words</div>
+          <div class="auth-sub">Studio</div>
+        </div>
+      </div>
+      <div class="seg" role="tablist">
+        <button type="button" class="seg-btn is-on" data-mode="login">Вход</button>
+        <button type="button" class="seg-btn" data-mode="register">По приглашению</button>
+      </div>
+      <form id="auth-form" autocomplete="on" novalidate>
+        <label class="field" data-only="register">
+          <span>Код приглашения или сброса пароля</span>
+          <input id="f-code" placeholder="TW-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false">
+        </label>
+        <label class="field">
+          <span>Логин</span>
+          <input id="f-login" autocomplete="username" spellcheck="false" placeholder="латиница, 3-24 символа">
+        </label>
+        <label class="field" data-only="register">
+          <span>Имя в чате</span>
+          <input id="f-name" placeholder="можно оставить как в приглашении">
+        </label>
+        <label class="field">
+          <span>Пароль</span>
+          <input id="f-pass" type="password" autocomplete="current-password" placeholder="от 10 символов">
+        </label>
+        <p class="hint" data-only="register">Для сброса пароля логин и имя не нужны: введите код и новый пароль.</p>
+        <button class="btn btn-accent btn-wide" id="auth-go" type="submit">Войти</button>
+        <p class="error" id="auth-error" role="alert"></p>
+      </form>
+      <details class="auth-server">
+        <summary>Сервер: <span id="auth-server-url"></span></summary>
+        <div class="row">
+          <input id="f-server" spellcheck="false">
+          <button class="btn" type="button" id="auth-server-save">Сохранить</button>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- Приложение -->
+  <section id="app" class="app" hidden>
+    <nav class="rail">
+      <img class="rail-logo" src="../assets/icon.png" alt="Twenty Words Studio">
+      <button class="rail-btn is-on" data-view="home" title="Главная"><span class="ico" data-ico="home"></span><span>Главная</span></button>
+      <button class="rail-btn" data-view="chat" title="Чат"><span class="ico" data-ico="chat"></span><span>Чат</span><i class="rail-badge" id="badge-chat" hidden></i></button>
+      <button class="rail-btn" data-view="assistant" title="Ассистент"><span class="ico" data-ico="spark"></span><span>Ассистент</span></button>
+      <button class="rail-btn" data-view="tools" title="Инструменты"><span class="ico" data-ico="tools"></span><span>Инструменты</span></button>
+      <button class="rail-btn" data-view="admin" title="Админ" id="rail-admin" hidden><span class="ico" data-ico="shield"></span><span>Админ</span></button>
+      <div class="rail-spacer"></div>
+      <button class="rail-btn rail-me" data-view="profile" title="Профиль"><span id="rail-avatar"></span><span>Профиль</span></button>
+    </nav>
+
+    <!-- Главная -->
+    <div class="view view-home" data-view-pane="home">
+      <div class="home-stage">
+        <canvas id="home-canvas"></canvas>
+        <div class="home-head mono">TWENTY WORDS <span>/ STUDIO</span> <em id="home-count"></em></div>
+        <div class="home-tip" id="home-tip" hidden></div>
+        <aside class="home-drawer" id="home-drawer" hidden></aside>
+      </div>
+    </div>
+
+    <!-- Чат -->
+    <div class="view view-chat" data-view-pane="chat" hidden>
+      <aside class="side">
+        <div class="side-head">
+          <div class="side-title">Чат команды</div>
+          <div class="conn" id="conn"><i></i><span>нет связи</span></div>
+        </div>
+        <div class="side-group">Комнаты</div>
+        <div id="room-list"></div>
+        <div class="side-group">Люди</div>
+        <div id="people-list"></div>
+      </aside>
+      <main class="chat">
+        <header class="chat-head">
+          <div class="chat-title" id="chat-title"></div>
+          <div class="chat-sub" id="chat-sub"></div>
+        </header>
+        <div class="log" id="log"></div>
+        <div class="typing" id="typing"></div>
+        <form class="composer" id="composer">
+          <textarea id="composer-text" rows="1" placeholder="Сообщение" maxlength="4000"></textarea>
+          <button class="btn btn-accent" type="submit" title="Отправить (Enter)">Отправить</button>
+        </form>
+      </main>
+    </div>
+
+    <!-- Ассистент -->
+    <div class="view view-ai" data-view-pane="assistant" hidden>
+      <aside class="side">
+        <div class="side-head">
+          <div class="side-title">Ассистент</div>
+          <div class="muted small" id="ai-model-label"></div>
+        </div>
+        <div class="side-pad"><button class="btn btn-accent btn-wide" type="button" id="ai-new">Новый чат</button></div>
+        <div id="ai-chat-list"></div>
+      </aside>
+      <main class="chat">
+        <header class="chat-head row between">
+          <div class="grow">
+            <div class="chat-title" id="ai-title"></div>
+            <div class="chat-sub" id="ai-sub"></div>
+          </div>
+          <div class="row gap-s" id="ai-tools">
+            <select id="ai-model" title="Модель этого чата"></select>
+            <button class="btn btn-s" type="button" id="ai-system-btn" title="Что модель должна знать в этом чате">Установка</button>
+            <button class="btn btn-s" type="button" id="ai-summary-btn" title="Что модель помнит о ранней части разговора">Памятка</button>
+            <button class="btn btn-s" type="button" id="ai-rename-btn">Переименовать</button>
+            <button class="btn btn-s btn-danger-ghost" type="button" id="ai-delete-btn">Удалить</button>
+          </div>
+        </header>
+        <div class="log ai-log" id="ai-log"></div>
+        <div class="ai-quota" id="ai-quota"><div class="bar"><i id="ai-quota-fill"></i></div><span id="ai-quota-text"></span></div>
+        <form class="composer" id="ai-composer">
+          <textarea id="ai-text" rows="1" placeholder="Сообщение ассистенту. Enter отправить, Shift+Enter новая строка" maxlength="20000"></textarea>
+          <button class="btn btn-accent" type="submit" id="ai-send">Отправить</button>
+          <button class="btn" type="button" id="ai-stop" hidden>Стоп</button>
+        </form>
+      </main>
+    </div>
+
+    <!-- Инструменты -->
+    <div class="view view-tools" data-view-pane="tools" hidden>
+      <div class="page">
+        <h1>Инструменты</h1>
+        <p class="muted">Инструменты кузницы с сайта. Скачайте те, что нужны вам: после установки они работают без интернета, в отдельном окне. Работы сохраняются у вас на компьютере.</p>
+        <div class="tool-grid" id="tool-grid"></div>
+      </div>
+    </div>
+
+    <!-- Админ -->
+    <div class="view view-admin" data-view-pane="admin" hidden>
+      <div class="page">
+        <h1>Админ</h1>
+
+        <div class="card">
+          <h2>Пригласить человека</h2>
+          <form class="row wrap" id="invite-form">
+            <input id="inv-name" placeholder="Имя" maxlength="32">
+            <select id="inv-role">
+              <option value="member">участник</option>
+              <option value="admin">админ</option>
+            </select>
+            <select id="inv-days">
+              <option value="1">1 день</option>
+              <option value="3">3 дня</option>
+              <option value="7" selected>7 дней</option>
+              <option value="14">14 дней</option>
+            </select>
+            <button class="btn btn-accent" type="submit">Создать код</button>
+          </form>
+          <div class="code-box" id="code-box" hidden>
+            <div>
+              <div class="code-label" id="code-label"></div>
+              <div class="code" id="code-value"></div>
+              <div class="muted small">Код одноразовый и больше не покажется. Передайте его лично.</div>
+            </div>
+            <button class="btn" type="button" id="code-copy">Копировать</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Люди</h2>
+          <table class="table">
+            <thead><tr><th></th><th>Имя</th><th>Логин</th><th>Роль</th><th>Статус</th><th></th></tr></thead>
+            <tbody id="admin-users"></tbody>
+          </table>
+        </div>
+
+        <div class="card" id="admin-ai-card">
+          <h2>Ассистент</h2>
+          <div id="admin-ai-pools"></div>
+          <div class="row wrap ai-defaults">
+            <span class="muted small">Модель по умолчанию для новых чатов:</span>
+            <select id="aid-model"></select>
+            <button class="btn btn-s" type="button" id="aid-save">Сохранить</button>
+          </div>
+          <table class="table">
+            <thead id="admin-ai-head"></thead>
+            <tbody id="admin-ai-users"></tbody>
+          </table>
+          <p class="muted small" id="admin-ai-rules"></p>
+        </div>
+
+        <div class="card">
+          <h2>Неиспользованные коды</h2>
+          <table class="table">
+            <thead><tr><th>Для кого</th><th>Тип</th><th>Роль</th><th>Действует до</th><th></th></tr></thead>
+            <tbody id="admin-invites"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Профиль -->
+    <div class="view view-profile" data-view-pane="profile" hidden>
+      <div class="page">
+        <h1>Профиль</h1>
+        <div class="card">
+          <h2>Как вас видят</h2>
+          <div class="row">
+            <div id="prof-avatar" class="avatar-lg"></div>
+            <div class="grow">
+              <label class="field"><span>Имя</span><input id="prof-name" maxlength="32"></label>
+              <div class="muted small" id="prof-login"></div>
+            </div>
+          </div>
+          <div class="field"><span>Цвет</span><div class="swatches" id="prof-colors"></div></div>
+          <div class="field"><span>Картинка</span><div class="presets" id="prof-presets"></div></div>
+          <button class="btn btn-accent" id="prof-save" type="button">Сохранить</button>
+        </div>
+        <div class="card">
+          <h2>Пароль</h2>
+          <form class="col" id="pass-form">
+            <input type="password" id="pass-old" placeholder="Текущий пароль" autocomplete="current-password">
+            <input type="password" id="pass-new" placeholder="Новый пароль, от 10 символов" autocomplete="new-password">
+            <button class="btn" type="submit">Сменить пароль</button>
+          </form>
+          <p class="muted small">После смены пароля остальные устройства выйдут из аккаунта.</p>
+        </div>
+        <div class="card">
+          <h2>Оформление</h2>
+          <div class="themes" id="theme-list"></div>
+        </div>
+        <div class="card">
+          <h2>Приложение</h2>
+          <label class="check"><input type="checkbox" id="set-notify"> Уведомления о новых сообщениях, когда окно свёрнуто</label>
+          <div class="field">
+            <span>Сервер</span>
+            <div class="row"><input id="set-server" spellcheck="false"><button class="btn" type="button" id="set-server-save">Сохранить</button></div>
+          </div>
+          <div class="row between">
+            <span class="muted small" id="app-version"></span>
+            <button class="btn btn-danger-ghost" type="button" id="logout">Выйти из аккаунта</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="modal" id="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <h2 id="modal-title"></h2>
+      <div id="modal-body"></div>
+      <div class="row end">
+        <button class="btn" type="button" id="modal-cancel">Отмена</button>
+        <button class="btn btn-accent" type="button" id="modal-ok">Да</button>
+      </div>
+    </div>
+  </div>
+  <div class="toasts" id="toasts"></div>
+
+  <script src="themes.js"></script>
+  <script src="app.js"></script>
+  <script src="home.js"></script>
+  <script src="tools.js"></script>
+  <script src="assistant.js"></script>
+</body>
+</html>
