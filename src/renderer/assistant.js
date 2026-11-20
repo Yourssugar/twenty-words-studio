@@ -893,11 +893,22 @@ function renderAdminExtras(d) {
     const ctx = h('input', { type: 'number', min: String(d.rules.ctxMin || 4000), max: String(d.rules.ctxMax || 1000000), step: '4000', value: m.ctx });
     md.append(h('div', { class: 'row wrap gap-s model-row' },
       h('b', { class: 'model-name', text: m.label }),
+      h('span', { class: 'muted small', text: m.name }),
       h('label', { class: 'inline' }, 'контекст за запрос, токенов', ctx),
       h('button', { class: 'btn btn-s', type: 'button', text: 'Сохранить', onclick: async () => {
         try {
           await call(studio.admin.aiModel(m.name, Number(ctx.value) || 0));
           toast('Сохранено: ' + m.label);
+          loadAdminAI();
+        } catch (err) {
+          toast(errText(err.code));
+        }
+      } }),
+      h('button', { class: 'btn btn-s btn-danger-ghost', type: 'button', text: 'Убрать', onclick: async () => {
+        if (!(await modal({ title: 'Убрать модель ' + m.label + '?', body: 'Модель пропадёт из списка у всех. Чаты с ней перейдут на модель по умолчанию, переписка сохранится. Вернуть можно командой на сервере.', ok: 'Убрать', danger: true }))) return;
+        try {
+          await call(studio.admin.aiDeleteModel(m.name));
+          toast('Убрано: ' + m.label);
           loadAdminAI();
         } catch (err) {
           toast(errText(err.code));

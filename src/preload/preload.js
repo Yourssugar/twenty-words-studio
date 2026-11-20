@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld('studio', {
     aiEditSkill: (id, skill) => call('admin:aiEditSkill', { id, ...skill }),
     aiDeleteSkill: (id) => call('admin:aiDeleteSkill', { id }),
     aiModel: (name, ctx) => call('admin:aiModel', { name, ctx }),
+    aiDeleteModel: (name) => call('admin:aiDeleteModel', { name }),
     users: () => call('admin:users'),
     invites: () => call('admin:invites'),
     createInvite: (name, role, days) => call('admin:createInvite', { name, role, days }),

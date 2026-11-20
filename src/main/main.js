@@ -368,6 +368,11 @@ function registerIpc() {
     if (!/^[\w.:-]{1,80}$/.test(name)) throw Object.assign(new Error('bad_input'), { code: 'bad_input' });
     return client.request('PUT', '/api/admin/ai/models/' + encodeURIComponent(name), { ctx: int(a.ctx) });
   });
+  handle('admin:aiDeleteModel', (a) => {
+    const name = str(a.name, 80);
+    if (!/^[\w.:-]{1,80}$/.test(name)) throw Object.assign(new Error('bad_input'), { code: 'bad_input' });
+    return client.request('DELETE', '/api/admin/ai/models/' + encodeURIComponent(name));
+  });
   handle('admin:aiPool', (a) => {
     const name = str(a.name, 40);
     if (!poolName(name)) throw Object.assign(new Error('bad_input'), { code: 'bad_input' });
