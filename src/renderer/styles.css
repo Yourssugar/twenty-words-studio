@@ -440,3 +440,38 @@ label.inline input { width: 120px; }
 .ai-dots i:nth-child(3) { animation-delay: .4s; }
 @keyframes aiDot { 0%, 100% { opacity: .25; } 40% { opacity: 1; } }
 #ai-live-timer { font-variant-numeric: tabular-nums; }
+
+/* ---------- Проекты ---------- */
+.proj-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.proj-main .chat-head { gap: 16px; }
+.proj-body { flex: 1; min-height: 0; display: flex; }
+.proj-stage { position: relative; flex: 1; min-width: 0; overflow: hidden; background: var(--bg); }
+.proj-stage canvas { display: block; position: absolute; inset: 0; }
+.proj-empty { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); pointer-events: none; text-align: center; max-width: 360px; }
+.proj-tip { position: absolute; z-index: 3; max-width: 260px; padding: 6px 9px; border-radius: 6px; background: var(--panel-3); border: 1px solid var(--line); font-size: 12px; color: var(--text); white-space: pre-wrap; pointer-events: none; }
+.proj-console-btn { position: absolute; left: 12px; bottom: 12px; z-index: 2; }
+.proj-console-btn.is-over { color: #ffb4a8; border-color: rgba(229, 83, 75, .5); }
+.proj-net { margin: 0 4px; font-size: 12px; }
+.proj-file { width: 460px; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 14px; background: var(--panel); border-left: 1px solid var(--line); min-height: 0; overflow-y: auto; }
+.proj-help ul { padding-left: 18px; margin: 8px 0; }
+.proj-help li { margin-bottom: 6px; }
+.proj-file-head { display: flex; gap: 8px; align-items: center; }
+.proj-file-head input { flex: 1; }
+.proj-ext { flex: none; font: 11px Consolas, "Cascadia Mono", monospace; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; color: var(--ext); border: 1px solid color-mix(in srgb, var(--ext) 45%, transparent); background: color-mix(in srgb, var(--ext) 10%, transparent); }
+.proj-links { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.proj-link-sel { padding: 2px 6px; font-size: 12px; max-width: 180px; }
+.proj-code { flex: 1; min-height: 240px; resize: none; font: 13px/1.5 Consolas, "Cascadia Mono", ui-monospace, monospace; tab-size: 2; white-space: pre; overflow: auto; }
+.proj-code[readonly] { opacity: .9; }
+.proj-file-foot { flex-wrap: wrap; }
+.proj-console { height: 200px; flex: none; display: flex; flex-direction: column; border-top: 1px solid var(--line); background: var(--rail); }
+.proj-console-head { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--line); }
+.proj-console-log { flex: 1; overflow-y: auto; padding: 4px 0; font-size: 12px; }
+.cl { display: flex; gap: 12px; padding: 2px 12px; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
+.cl-text { flex: 1; white-space: pre-wrap; word-break: break-word; }
+.cl-src { color: var(--muted); flex: none; }
+.cl-warning { color: #f0c36a; background: rgba(240, 195, 106, .05); }
+.cl-error { color: #ff9b94; background: rgba(229, 83, 75, .07); }
+.snap-card { display: flex; align-items: center; gap: 10px; margin-top: 6px; padding: 8px 10px; max-width: 520px; border: 1px solid var(--accent-edge); border-radius: 8px; background: var(--accent-soft); }
+.snap-title { font-weight: 600; }
+.topic-composer .btn:not(.btn-accent) { flex: none; }
+.notes-tools select { flex: 1; }

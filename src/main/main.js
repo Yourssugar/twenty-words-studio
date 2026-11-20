@@ -8,6 +8,7 @@ const os = require('os');
 const path = require('path');
 const { StudioClient, normalizeServerUrl } = require('./client');
 const { Tools, registerScheme } = require('./tools');
+const { Runner, schemePrivileges } = require('./runner');
 const { setupUpdater } = require('./updater');
 
 const ROOT = path.join(__dirname, '..', '..');
@@ -19,6 +20,7 @@ let win = null;
 let client = null;
 let tools = null;
 let updater = null;
+let runner = null;
 const names = new Map(); // id -> имя, для текста уведомлений
 const aiStreams = new Map(); // чат ассистента -> AbortController текущего ответа
 let myId = 0;
@@ -309,7 +311,7 @@ function registerIpc() {
     aiStreams.set(id, ctrl);
     let last = null;
     try {
-      await client.stream(path, { text: str(a.text, 20000), notes: ids(a.notes, 10) }, (ev) => {
+      await client.stream(path, { text: str(a.text, 20000), files: ids(a.files, 20) }, (ev) => {
         if (ev.t === 'done' || ev.t === 'error') last = ev;
         send('ai:event', { chatId: id, ...ev });
       }, ctrl.signal);
@@ -321,17 +323,8 @@ function registerIpc() {
       aiStreams.delete(id);
     }
   });
-  handle('ai:estimate', (a) => client.request('POST', chatPath(a) + '/estimate', { text: str(a.text, 20000), notes: ids(a.notes, 10) }));
+  handle('ai:estimate', (a) => client.request('POST', chatPath(a) + '/estimate', { text: str(a.text, 20000), files: ids(a.files, 20) }));
   handle('ai:skills', () => client.request('GET', '/api/ai/skills'));
-  const notePath = (a) => {
-    const id = int(a.id);
-    if (!id) throw Object.assign(new Error('not_found'), { code: 'not_found' });
-    return '/api/ai/notes/' + id;
-  };
-  handle('ai:notes', () => client.request('GET', '/api/ai/notes'));
-  handle('ai:addNote', (a) => client.request('POST', '/api/ai/notes', { title: str(a.title, 200), body: str(a.body, 60000) }));
-  handle('ai:editNote', (a) => client.request('PATCH', notePath(a), { title: str(a.title, 200), body: str(a.body, 60000) }));
-  handle('ai:deleteNote', (a) => client.request('DELETE', notePath(a)));
   handle('ai:stop', (a) => {
     const c = aiStreams.get(int(a.chatId));
     if (c) c.abort();
@@ -381,6 +374,67 @@ function registerIpc() {
     return client.request('PUT', '/api/admin/ai/pools/' + name, body);
   });
 
+  // Проекты и запуск
+  const need = (v) => {
+    const id = int(v);
+    if (!id) throw Object.assign(new Error('not_found'), { code: 'not_found' });
+    return id;
+  };
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(-100000, Math.min(100000, v)) : undefined);
+  const fileBody = (a) => {
+    const b = {};
+    if (typeof a.path === 'string') b.path = str(a.path, 200);
+    if (typeof a.ext === 'string') b.ext = str(a.ext, 10);
+    if (typeof a.body === 'string') b.body = str(a.body, 600000);
+    if (typeof a.descr === 'string') b.descr = str(a.descr, 400);
+    if (num(a.x) !== undefined && num(a.y) !== undefined) {
+      b.x = num(a.x);
+      b.y = num(a.y);
+    }
+    return b;
+  };
+  handle('proj:list', () => client.request('GET', '/api/projects'));
+  handle('proj:create', (a) => client.request('POST', '/api/projects', { title: str(a.title, 80) }));
+  handle('proj:get', (a) => client.request('GET', '/api/projects/' + need(a.id)));
+  handle('proj:update', (a) => {
+    const b = {};
+    if (typeof a.title === 'string') b.title = str(a.title, 80);
+    if (typeof a.net === 'boolean') b.net = a.net;
+    return client.request('PATCH', '/api/projects/' + need(a.id), b);
+  });
+  handle('proj:delete', (a) => client.request('DELETE', '/api/projects/' + need(a.id)));
+  handle('proj:addFile', (a) => client.request('POST', '/api/projects/' + need(a.id) + '/files', fileBody(a)));
+  handle('proj:editFile', (a) => {
+    const b = fileBody(a);
+    delete b.ext;
+    if (num(a.x) !== undefined && num(a.y) === undefined) b.x = num(a.x);
+    return client.request('PATCH', '/api/projects/files/' + need(a.fileId), b);
+  });
+  handle('proj:deleteFile', (a) => client.request('DELETE', '/api/projects/files/' + need(a.fileId)));
+  handle('proj:link', (a) => {
+    const id = need(a.id);
+    const x = need(a.a);
+    const y = need(a.b);
+    return a.on === false
+      ? client.request('DELETE', `/api/projects/${id}/links/${x}/${y}`)
+      : client.request('POST', `/api/projects/${id}/links`, { a: x, b: y });
+  });
+  handle('proj:share', (a) => client.request('POST', '/api/projects/' + need(a.id) + '/share', { room: str(a.room, 64), text: str(a.text, 4000) }));
+  handle('snap:get', (a) => client.request('GET', '/api/snaps/' + need(a.id)));
+  handle('snap:copy', (a) => client.request('POST', '/api/snaps/' + need(a.id) + '/copy'));
+  handle('run:project', async (a) => {
+    const id = need(a.id);
+    const p = await client.request('GET', '/api/projects/' + id);
+    return runner.open({ key: 'p' + id, title: p.title, files: p.fileList.map((f) => ({ path: f.path, body: f.body })), net: !!p.net });
+  });
+  handle('run:snap', async (a) => {
+    const id = need(a.id);
+    const sn = await client.request('GET', '/api/snaps/' + id);
+    // Снимок всегда без сети: сеть можно включить только в своей копии.
+    return runner.open({ key: 's' + id, title: sn.title + ' (снимок)', files: sn.files.map((f) => ({ path: f.path, body: f.body })), net: false });
+  });
+  handle('run:logs', (a) => runner.logs(str(a.key, 20)));
+
   // Инструменты кузницы
   const toolId = (a) => str(a.id, 40);
   handle('tools:list', () => tools.list());
@@ -416,7 +470,7 @@ function registerIpc() {
 
 // ---------- запуск ----------
 
-registerScheme();
+registerScheme([schemePrivileges]);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -436,6 +490,16 @@ if (!app.requestSingleInstanceLock()) {
     setupClient();
     tools = new Tools({ root: ROOT, notify: send });
     tools.setupSession();
+    runner = new Runner({
+      notify: send,
+      blockedHost: () => {
+        try {
+          return new URL(getSettings().serverUrl).hostname;
+        } catch {
+          return '';
+        }
+      },
+    });
     registerIpc();
     createWindow();
     updater = setupUpdater(send);

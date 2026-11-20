@@ -12,16 +12,15 @@ const AI = {
   enabled: true,
   loaded: false,
   skills: [], // навыки от админа
-  notes: [], // мой блокнот
-  attach: [], // id заметок, приложенных к следующему сообщению
-  note: null, // открытая в блокноте заметка: объект или 'new'
-  notesOpen: false,
+  attach: [], // файлы проектов к следующему сообщению: [{id, title, body}]
+  filesProject: 0, // какой проект показан в панели "Файлы"
+  notesOpen: false, // панель "Файлы" открыта
   est: null, // оценка токенов для текущего ввода
 };
 
 Object.assign(ERRORS, {
   too_long: 'Не влезает в объём контекста модели. Уберите часть вложений или сократите текст.',
-  too_many: 'Слишком много: лимит заметок или вложений.',
+  too_many: 'Слишком много: к одному сообщению до 20 файлов, проектов до 50.',
   bad_title: 'Нужно название.',
 });
 
@@ -83,9 +82,11 @@ function renderMarkdown(src) {
         copy.textContent = 'скопировано';
         setTimeout(() => (copy.textContent = 'копировать'), 1500);
       });
-      const keep = h('button', { class: 'mini', type: 'button', text: 'в блокнот' });
-      keep.addEventListener('click', () => saveToNotebook(lang, '```' + lang + '\n' + code + '\n```', keep));
-      root.append(h('div', { class: 'codeblock' }, h('div', { class: 'codeblock-head' }, h('span', { text: lang || 'код' }), h('span', { class: 'row gap-s' }, keep, copy)), h('pre', {}, h('code', { text: code }))));
+      const keep = h('button', { class: 'mini', type: 'button', text: 'в черновики', title: 'Сохранить файлом в проект "Черновики"' });
+      keep.addEventListener('click', () => saveToDrafts(extForLang(lang), code, keep));
+      const toProj = h('button', { class: 'mini', type: 'button', text: 'в проект', title: 'Сохранить файлом в проект: новый или заменить существующий' });
+      toProj.addEventListener('click', () => saveToProject(lang, code));
+      root.append(h('div', { class: 'codeblock' }, h('div', { class: 'codeblock-head' }, h('span', { text: lang || 'код' }), h('span', { class: 'row gap-s' }, keep, toProj, copy)), h('pre', {}, h('code', { text: code }))));
       return;
     }
     // обычный текст: абзацы и списки
@@ -116,10 +117,9 @@ function renderMarkdown(src) {
 
 async function openAssistant() {
   try {
-    const [chats, models, skills, notes] = await Promise.all([call(studio.ai.chats()), call(studio.ai.models()), call(studio.ai.skills()), call(studio.ai.notes())]);
+    const [chats, models, skills] = await Promise.all([call(studio.ai.chats()), call(studio.ai.models()), call(studio.ai.skills()), pjLoadList()]);
     AI.chats = chats;
     AI.skills = skills;
-    AI.notes = notes;
     applyModels(models);
     AI.loaded = true;
     if (!AI.chat && chats.length) await selectChat(chats[0].id);
@@ -242,8 +242,8 @@ function aiBubble(role, content, m, live, dur) {
     const passed = fmtDur(Date.now() - AI.streaming.started);
     meta = h('div', { class: 'ai-meta' }, h('span', { id: 'ai-live-timer', text: (content ? 'пишет ' : '') + passed }));
   } else if (m && !mine) {
-    const keep = h('button', { class: 'mini', type: 'button', text: 'в блокнот', title: 'Сохранить весь ответ в блокнот' });
-    keep.addEventListener('click', () => saveToNotebook('', content, keep));
+    const keep = h('button', { class: 'mini', type: 'button', text: 'в черновики', title: 'Сохранить весь ответ файлом .md в Черновики' });
+    keep.addEventListener('click', () => saveToDrafts('md', content, keep));
     meta = h('div', { class: 'ai-meta row gap-s' },
       m.tokensIn || m.tokensOut ? h('span', { text: `${fmtTokens(m.tokensIn + m.tokensOut)} токенов` }) : null,
       dur > 0 ? h('span', { text: 'ответ за ' + fmtDur(dur) }) : null,
@@ -416,7 +416,7 @@ $('ai-composer').addEventListener('submit', async (e) => {
     return;
   }
   const chatId = AI.chat.id;
-  const notes = AI.attach.slice();
+  const files = AI.attach.map((a) => a.id);
   AI.streaming = { chatId, text: '', started: Date.now() };
   const tick = setInterval(() => {
     const el = document.getElementById('ai-live-timer');
@@ -428,7 +428,7 @@ $('ai-composer').addEventListener('submit', async (e) => {
   renderChatList();
   renderAILog(true);
   try {
-    const final = await call(studio.ai.send(chatId, text, notes));
+    const final = await call(studio.ai.send(chatId, text, files));
     if (!final || final.t !== 'error') {
       AI.attach = [];
       renderBar();
@@ -633,10 +633,8 @@ function renderBar() {
   sb.hidden = !AI.skills.length;
   const box = $('ai-attach');
   box.innerHTML = '';
-  for (const id of AI.attach) {
-    const n = AI.notes.find((x) => x.id === id);
-    if (!n) continue;
-    box.append(h('span', { class: 'chip' }, h('span', { text: n.title }), h('button', { class: 'chip-x', type: 'button', title: 'Не прикладывать', text: 'x', onclick: () => toggleAttach(id) })));
+  for (const a of AI.attach) {
+    box.append(h('span', { class: 'chip', title: a.title }, h('span', { text: a.title.split('/').slice(1).join('/') || a.title }), h('button', { class: 'chip-x', type: 'button', title: 'Не прикладывать', text: 'x', onclick: () => toggleAttach(a) })));
   }
   renderEstimate();
 }
@@ -666,7 +664,7 @@ function scheduleEstimate(delay = 450) {
     }
     const seq = ++estSeq;
     try {
-      const r = await call(studio.ai.estimate(AI.chat.id, aiText.value, AI.attach));
+      const r = await call(studio.ai.estimate(AI.chat.id, aiText.value, AI.attach.map((a) => a.id)));
       if (seq === estSeq) {
         AI.est = r;
         renderEstimate();
@@ -677,16 +675,40 @@ function scheduleEstimate(delay = 450) {
   }, delay);
 }
 
-function toggleAttach(id) {
-  const i = AI.attach.indexOf(id);
+const MAX_ATTACH = 20;
+
+function toggleAttach(file) {
+  const i = AI.attach.findIndex((a) => a.id === file.id);
   if (i >= 0) AI.attach.splice(i, 1);
-  else if (AI.attach.length >= 10) {
-    toast('К одному сообщению можно приложить до 10 заметок.');
+  else if (AI.attach.length >= MAX_ATTACH) {
+    toast('К одному сообщению можно приложить до ' + MAX_ATTACH + ' файлов.');
     return;
-  } else AI.attach.push(id);
+  } else AI.attach.push({ id: file.id, title: file.title, body: file.body });
   renderBar();
   renderNotes();
   scheduleEstimate(0);
+}
+
+// Из раздела "Проекты": файл и соседи по связям.
+function aiAttachFiles(list) {
+  let skipped = 0;
+  for (const f of list) {
+    if (AI.attach.some((a) => a.id === f.id)) continue;
+    if (AI.attach.length >= MAX_ATTACH) {
+      skipped++;
+      continue;
+    }
+    AI.attach.push({ id: f.id, title: f.title, body: f.body });
+  }
+  if (skipped) toast('Приложено не всё: не больше ' + MAX_ATTACH + ' файлов к сообщению.');
+  else toast('Приложено файлов: ' + list.length);
+  renderBar();
+  scheduleEstimate(0);
+}
+
+function aiPrefill(text) {
+  aiText.value = aiText.value.trim() ? aiText.value.trim() + '\n\n' + text : text;
+  aiText.dispatchEvent(new Event('input'));
 }
 
 function closePop() {
@@ -730,20 +752,60 @@ document.addEventListener('click', (e) => {
 
 $('ai-attach-btn').addEventListener('click', () => {
   AI.notesOpen = true;
-  AI.note = null;
   renderNotes();
-  if (!AI.notes.length) toast('Блокнот пуст. Сохраните туда код или текст кнопкой "в блокнот" под ответом.');
 });
 
-// ---------- блокнот ----------
+// ---------- сохранение из ответов и панель "Файлы" ----------
 
-async function saveToNotebook(title, body, btn) {
+async function saveToDrafts(ext, body, btn) {
   try {
-    const n = await call(studio.ai.addNote(title, body));
-    AI.notes.unshift(n);
+    const f = await pjSaveToDrafts(ext, body);
     if (btn) {
       btn.textContent = 'сохранено';
-      setTimeout(() => (btn.textContent = 'в блокнот'), 1500);
+      setTimeout(() => (btn.textContent = 'в черновики'), 1500);
+    }
+    toast('В Черновики: ' + f.path);
+    if (AI.notesOpen) renderNotes();
+  } catch (err) {
+    toast(errText(err.code));
+  }
+}
+
+const DEFAULT_NAMES = { html: 'index.html', css: 'style.css', js: 'app.js', json: 'data.json', md: 'notes.md', svg: 'image.svg', txt: 'notes.txt' };
+
+async function saveToProject(lang, code) {
+  try {
+    if (!PJ.loaded) await pjLoadList();
+  } catch (err) {
+    toast(errText(err.code));
+    return;
+  }
+  const ext = extForLang(lang);
+  const sel = h('select', {}, ...PJ.list.map((p) => h('option', { value: String(p.id), text: p.title })));
+  const last = AI.filesProject || (PJ.list.find((p) => p.kind !== 'drafts') || PJ.list[0] || {}).id;
+  if (last) sel.value = String(last);
+  const name = h('input', { class: 'mono', maxlength: '120', spellcheck: 'false' });
+  name.value = DEFAULT_NAMES[ext] || 'file.' + ext;
+  const body = h('div', {},
+    h('label', { class: 'field' }, h('span', { text: 'Проект' }), sel),
+    h('label', { class: 'field' }, h('span', { text: 'Имя файла' }), name),
+    h('p', { class: 'muted small', text: 'Если файл с таким именем есть, спрошу, заменить ли его.' }),
+  );
+  setTimeout(() => name.select(), 30);
+  if (!(await modal({ title: 'Сохранить в проект', body, ok: 'Сохранить' }))) return;
+  const pid = Number(sel.value);
+  AI.filesProject = pid;
+  try {
+    const full = await pjFull(pid, true);
+    const path = name.value.trim().replace(/\\/g, '/').replace(/^\/+/, '');
+    const same = full.fileList.find((f) => f.path.toLowerCase() === path.toLowerCase());
+    if (same) {
+      if (!(await modal({ title: 'Заменить ' + same.path + '?', body: 'В проекте "' + full.title + '" уже есть этот файл. Старый текст будет заменён.', ok: 'Заменить', danger: true }))) return;
+      await pjOverwrite(pid, same, code);
+      toast('Заменено: ' + full.title + '/' + same.path);
+    } else {
+      const f = await pjSaveAsFile(pid, { path, body: code });
+      toast('Сохранено: ' + full.title + '/' + f.path);
     }
     if (AI.notesOpen) renderNotes();
   } catch (err) {
@@ -753,112 +815,56 @@ async function saveToNotebook(title, body, btn) {
 
 $('ai-notes-btn').addEventListener('click', () => {
   AI.notesOpen = !AI.notesOpen;
-  AI.note = null;
   renderNotes();
 });
 
-function renderNotes() {
+let filesSeq = 0;
+async function renderNotes() {
   const box = $('ai-notes');
   box.hidden = !AI.notesOpen;
   $('ai-notes-btn').classList.toggle('is-on', AI.notesOpen);
   if (!AI.notesOpen) return;
-  box.innerHTML = '';
-  if (AI.note) {
-    renderNoteEditor(box);
-    return;
+  const seq = ++filesSeq;
+  let full = null;
+  try {
+    if (!PJ.loaded) await pjLoadList();
+    if (!PJ.list.some((p) => p.id === AI.filesProject)) AI.filesProject = (PJ.list[0] || {}).id || 0;
+    if (AI.filesProject) full = await pjFull(AI.filesProject);
+  } catch (err) {
+    toast(errText(err.code));
   }
+  if (seq !== filesSeq) return;
+  box.innerHTML = '';
   box.append(h('div', { class: 'notes-head' },
-    h('div', { class: 'grow' }, h('div', { class: 'side-title', text: 'Блокнот' }), h('div', { class: 'muted small', text: 'Только ваш. Галочка прикладывает заметку к следующему сообщению.' })),
+    h('div', { class: 'grow' }, h('div', { class: 'side-title', text: 'Файлы' }), h('div', { class: 'muted small', text: 'Галочка прикладывает файл к следующему сообщению. Связи и описания в модель не уходят.' })),
     h('button', { class: 'btn btn-s', type: 'button', text: 'Закрыть', onclick: () => { AI.notesOpen = false; renderNotes(); } }),
   ));
-  box.append(h('div', { class: 'notes-tools' }, h('button', { class: 'btn btn-accent btn-s', type: 'button', text: 'Новая заметка', onclick: () => { AI.note = 'new'; renderNotes(); } })));
+  const sel = h('select', {}, ...PJ.list.map((p) => h('option', { value: String(p.id), text: p.title + ' (' + (p.files || 0) + ')' })));
+  sel.value = String(AI.filesProject);
+  sel.addEventListener('change', () => {
+    AI.filesProject = Number(sel.value);
+    renderNotes();
+  });
+  box.append(h('div', { class: 'notes-tools row gap-s' }, sel, h('button', { class: 'btn btn-s', type: 'button', text: 'Открыть', title: 'Открыть проект в разделе "Проекты"', onclick: () => openProjectsView({ project: AI.filesProject }) })));
   const list = h('div', { class: 'notes-list' });
-  if (!AI.notes.length) list.append(h('div', { class: 'muted small notes-empty', text: 'Пусто. Под каждым ответом и блоком кода есть кнопка "в блокнот".' }));
-  for (const n of AI.notes) {
+  const files = full ? [...full.fileList].sort((a, b) => a.path.localeCompare(b.path)) : [];
+  if (!files.length) list.append(h('div', { class: 'muted small notes-empty', text: 'Пусто. Под ответами и блоками кода есть кнопки "в черновики" и "в проект".' }));
+  for (const f of files) {
+    const item = { id: f.id, title: full.title + '/' + f.path, body: f.body };
     const cb = h('input', { type: 'checkbox', title: 'Приложить к следующему сообщению' });
-    cb.checked = AI.attach.includes(n.id);
-    cb.addEventListener('change', () => toggleAttach(n.id));
-    const preview = n.body.replace(/```\w*\n?/g, '').trim();
+    cb.checked = AI.attach.some((a) => a.id === f.id);
+    cb.addEventListener('change', () => toggleAttach(item));
+    const preview = f.descr || f.body.trim().slice(0, 140);
     list.append(h('div', { class: 'note' + (cb.checked ? ' is-on' : '') },
       cb,
-      h('button', { class: 'note-open', type: 'button', onclick: () => { AI.note = n; renderNotes(); } },
-        h('div', { class: 'note-title', text: n.title }),
-        h('div', { class: 'note-preview', text: preview.length > 120 ? preview.slice(0, 118) + '...' : preview }),
-        h('div', { class: 'note-meta', text: dayLabel(n.updated) + ' · около ' + fmtTokens(Math.round([...n.body].length / 3) + 4) + ' токенов' }),
+      h('button', { class: 'note-open', type: 'button', title: 'Открыть в проекте', onclick: () => openProjectsView({ project: full.id, file: f.id }) },
+        h('div', { class: 'note-title mono', text: f.path }),
+        preview ? h('div', { class: 'note-preview', text: preview }) : null,
+        h('div', { class: 'note-meta', text: dayLabel(f.updated) + ', около ' + fmtTokens(approxTokens(f.body)) + ' токенов' }),
       ),
     ));
   }
   box.append(list);
-}
-
-function renderNoteEditor(box) {
-  const n = AI.note === 'new' ? { title: '', body: '' } : AI.note;
-  const title = h('input', { maxlength: '80', placeholder: 'Название (можно пусто: возьмётся из первой строки)' });
-  const body = h('textarea', { class: 'note-body', spellcheck: 'false', placeholder: 'Код, идея, памятка' });
-  title.value = n.title;
-  body.value = n.body;
-  const save = async () => {
-    try {
-      if (AI.note === 'new') {
-        const saved = await call(studio.ai.addNote(title.value, body.value));
-        AI.notes.unshift(saved);
-        AI.note = saved;
-      } else {
-        const saved = await call(studio.ai.editNote(n.id, title.value, body.value));
-        const i = AI.notes.findIndex((x) => x.id === saved.id);
-        if (i >= 0) AI.notes.splice(i, 1);
-        AI.notes.unshift(saved);
-        AI.note = saved;
-      }
-      toast('Сохранено');
-      renderNotes();
-      renderBar();
-      if (AI.attach.includes(AI.note.id)) scheduleEstimate(0);
-    } catch (err) {
-      toast(errText(err.code));
-    }
-  };
-  body.addEventListener('keydown', (e) => {
-    if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      save();
-    }
-    if (e.key === 'Tab' && !e.shiftKey) {
-      e.preventDefault();
-      body.setRangeText('  ', body.selectionStart, body.selectionEnd, 'end');
-    }
-  });
-  box.append(
-    h('div', { class: 'notes-head' },
-      h('button', { class: 'btn btn-s', type: 'button', text: 'Назад', onclick: () => { AI.note = null; renderNotes(); } }),
-      h('div', { class: 'grow' }),
-      AI.note !== 'new' ? h('button', { class: 'btn btn-s', type: 'button', text: AI.attach.includes(n.id) ? 'Не прикладывать' : 'Приложить', onclick: () => toggleAttach(n.id) }) : null,
-    ),
-    h('div', { class: 'note-edit' },
-      title,
-      body,
-      h('div', { class: 'row gap-s' },
-        h('button', { class: 'btn btn-accent btn-s', type: 'button', text: 'Сохранить', title: 'Ctrl+S', onclick: save }),
-        h('button', { class: 'btn btn-s', type: 'button', text: 'Копировать', onclick: async () => { await call(studio.app.copy(body.value)); toast('Скопировано'); } }),
-        h('div', { class: 'grow' }),
-        AI.note !== 'new' ? h('button', { class: 'btn btn-s btn-danger-ghost', type: 'button', text: 'Удалить', onclick: async () => {
-          if (!(await modal({ title: 'Удалить заметку?', body: '"' + n.title + '" удалится из блокнота.', ok: 'Удалить', danger: true }))) return;
-          try {
-            await call(studio.ai.deleteNote(n.id));
-            AI.notes = AI.notes.filter((x) => x.id !== n.id);
-            AI.attach = AI.attach.filter((x) => x !== n.id);
-            AI.note = null;
-            renderNotes();
-            renderBar();
-            scheduleEstimate(0);
-          } catch (err) {
-            toast(errText(err.code));
-          }
-        } }) : null,
-      ),
-    ),
-  );
-  setTimeout(() => (AI.note === 'new' ? body : body).focus(), 30);
 }
 
 // ---------- админка: установка, скиллы, модели ----------

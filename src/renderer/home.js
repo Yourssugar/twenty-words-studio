@@ -607,7 +607,8 @@ function renderTopic() {
 
 function topicComposer(cardId) {
   const ta = h('textarea', { rows: '1', maxlength: '4000', placeholder: 'Написать в обсуждение. Enter отправить, Shift+Enter новая строка' });
-  const form = h('form', { class: 'composer topic-composer', id: 'topic-form', dataset: { card: String(cardId) } }, ta, h('button', { class: 'btn btn-accent', type: 'submit', text: 'Отправить' }));
+  const proj = h('button', { class: 'btn', type: 'button', text: 'Проект', title: 'Прикрепить снимок своего проекта к обсуждению', onclick: () => shareProjectTo('card:' + cardId) });
+  const form = h('form', { class: 'composer topic-composer', id: 'topic-form', dataset: { card: String(cardId) } }, ta, proj, h('button', { class: 'btn btn-accent', type: 'submit', text: 'Отправить' }));
   const size = () => {
     ta.style.height = 'auto';
     ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
@@ -670,6 +671,7 @@ function topicMessage(m, compact) {
   const body = h('div', { class: 'msg-body' });
   if (!compact) body.append(h('div', { class: 'msg-head' }, h('span', { class: 'msg-name', text: u.name }), h('span', { class: 'msg-time', text: timeOf(m.ts) })));
   body.append(h('div', { class: 'msg-text' }, linkify(m.text), m.edited ? h('span', { class: 'edited', text: ' (изменено)' }) : null));
+  if (m.snap && typeof snapCard === 'function') body.append(snapCard(m.snap));
   row.append(body);
   if (mine || canDelete) {
     row.append(h('div', { class: 'msg-actions' },

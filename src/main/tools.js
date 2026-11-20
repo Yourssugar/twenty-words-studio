@@ -40,9 +40,11 @@ const MIME = {
 
 // Схему надо объявить до готовности приложения: тогда у страниц инструментов
 // обычное происхождение (origin) и работают localStorage и IndexedDB.
-function registerScheme() {
+// Свои схемы регистрируются одним вызовом до готовности приложения: повторный вызов затирает прежний.
+function registerScheme(extra = []) {
   protocol.registerSchemesAsPrivileged([
     { scheme: SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
+    ...extra,
   ]);
 }
 

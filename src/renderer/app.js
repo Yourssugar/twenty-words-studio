@@ -119,6 +119,7 @@ const ICONS = {
   audio: '<svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg>',
   image: '<svg viewBox="0 0 24 24"><path d="M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6"/></svg>',
   forge: '<svg viewBox="0 0 24 24"><path d="M4 9h11l4 3H8v5H4zM8 17l-2 3M12 17l2 3"/></svg>',
+  files: '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6"/></svg>',
   spark: '<svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg>',
 };
 function icons(root = document) {
@@ -264,6 +265,7 @@ async function enterApp() {
 function setView(view) {
   if (view === 'admin' && (!S.me || S.me.role !== 'admin')) view = 'home';
   if (S.view === 'home' && view !== 'home' && typeof leaveHome === 'function') leaveHome();
+  if (S.view === 'projects' && view !== 'projects' && typeof flushDraft === 'function') flushDraft();
   S.view = view;
   for (const b of document.querySelectorAll('.rail-btn')) b.classList.toggle('is-on', b.dataset.view === view);
   for (const p of document.querySelectorAll('[data-view-pane]')) p.hidden = p.dataset.viewPane !== view;
@@ -272,6 +274,7 @@ function setView(view) {
   if (view === 'admin') loadAdmin();
   if (view === 'profile') renderProfile();
   if (view === 'assistant' && typeof openAssistant === 'function') openAssistant();
+  if (view === 'projects' && typeof openProjects === 'function') openProjects();
   if (view === 'chat') {
     markRead();
     $('composer-text').focus();
@@ -603,6 +606,7 @@ function renderMessage(m, compact) {
     });
   } else {
     body.append(h('div', { class: 'msg-text' }, linkify(m.text), m.edited ? h('span', { class: 'edited', text: ' (изменено)' }) : null));
+    if (m.snap && typeof snapCard === 'function') body.append(snapCard(m.snap));
   }
   row.append(body);
   if (S.editing !== m.id && (mine || canDelete)) {

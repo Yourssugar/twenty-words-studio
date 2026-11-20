@@ -60,6 +60,7 @@
       <img class="rail-logo" src="../assets/icon.png" alt="Twenty Words Studio">
       <button class="rail-btn is-on" data-view="home" title="Главная"><span class="ico" data-ico="home"></span><span>Главная</span><i class="rail-badge" id="badge-home" hidden></i></button>
       <button class="rail-btn" data-view="chat" title="Чат"><span class="ico" data-ico="chat"></span><span>Чат</span><i class="rail-badge" id="badge-chat" hidden></i></button>
+      <button class="rail-btn" data-view="projects" title="Проекты"><span class="ico" data-ico="files"></span><span>Проекты</span></button>
       <button class="rail-btn" data-view="assistant" title="Ассистент"><span class="ico" data-ico="spark"></span><span>Ассистент</span></button>
       <button class="rail-btn" data-view="tools" title="Инструменты"><span class="ico" data-ico="tools"></span><span>Инструменты</span></button>
       <button class="rail-btn" data-view="admin" title="Админ" id="rail-admin" hidden><span class="ico" data-ico="shield"></span><span>Админ</span></button>
@@ -103,6 +104,37 @@
       </main>
     </div>
 
+    <!-- Проекты -->
+    <div class="view view-proj" data-view-pane="projects" hidden>
+      <aside class="side">
+        <div class="side-head">
+          <div class="side-title">Проекты</div>
+          <div class="muted small">личные, только текст</div>
+        </div>
+        <div class="side-pad"><button class="btn btn-accent btn-wide" type="button" id="proj-new">Новый проект</button></div>
+        <div id="proj-list"></div>
+      </aside>
+      <main class="proj-main">
+        <header class="chat-head row between">
+          <div class="grow">
+            <div class="chat-title" id="proj-title"></div>
+            <div class="chat-sub" id="proj-sub"></div>
+          </div>
+          <div class="row gap-s wrap end" id="proj-tools"></div>
+        </header>
+        <div class="proj-body">
+          <div class="proj-stage">
+            <canvas id="proj-canvas"></canvas>
+            <div class="proj-empty muted" id="proj-empty" hidden></div>
+            <div class="proj-tip" id="proj-tip" hidden></div>
+            <button class="btn btn-s proj-console-btn" type="button" id="proj-console-btn" hidden>Консоль</button>
+          </div>
+          <aside class="proj-file" id="proj-file"></aside>
+        </div>
+        <div class="proj-console" id="proj-console" hidden></div>
+      </main>
+    </div>
+
     <!-- Ассистент -->
     <div class="view view-ai" data-view-pane="assistant" hidden>
       <aside class="side">
@@ -126,14 +158,14 @@
             <button class="btn btn-s" type="button" id="ai-rename-btn">Переименовать</button>
             <button class="btn btn-s btn-danger-ghost" type="button" id="ai-delete-btn">Удалить</button>
           </div>
-          <button class="btn btn-s" type="button" id="ai-notes-btn" title="Свои заметки: код, идеи, памятки">Блокнот</button>
+          <button class="btn btn-s" type="button" id="ai-notes-btn" title="Файлы проектов: приложить к сообщению">Файлы</button>
         </header>
         <div class="log ai-log" id="ai-log"></div>
         <div class="ai-quota" id="ai-quota"><div class="bar"><i id="ai-quota-fill"></i></div><span id="ai-quota-text"></span></div>
         <div class="ai-bar" id="ai-bar">
           <div class="ai-pop" id="ai-skills-pop" hidden></div>
           <button class="btn btn-s" type="button" id="ai-skills-btn" title="Навыки дописываются к установке модели в этом чате">Скиллы</button>
-          <button class="btn btn-s" type="button" id="ai-attach-btn" title="Приложить заметки из блокнота к сообщению">Приложить</button>
+          <button class="btn btn-s" type="button" id="ai-attach-btn" title="Приложить файлы проектов к сообщению">Приложить</button>
           <div class="ai-attach" id="ai-attach"></div>
           <span class="ai-est" id="ai-est" title="Примерно столько токенов уйдёт в модель с этим сообщением: установка, навыки, памятка, история, вложения и текст"></span>
         </div>
@@ -293,5 +325,6 @@
   <script src="home.js"></script>
   <script src="tools.js"></script>
   <script src="assistant.js"></script>
+  <script src="projects.js"></script>
 </body>
 </html>
