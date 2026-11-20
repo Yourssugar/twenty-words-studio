@@ -169,7 +169,7 @@ function maybeNotify(m) {
   if (win) win.flashFrame(true);
   if (!Notification.isSupported()) return;
   const who = names.get(m.user) || 'Сообщение';
-  const where = m.room === 'work' ? ' · Рабочая зона' : m.room === 'free' ? ' · Свободные темы' : '';
+  const where = m.room === 'work' ? ' · Рабочая зона' : m.room === 'free' ? ' · Свободные темы' : m.room.startsWith('card:') ? ' · обсуждение темы' : '';
   const n = new Notification({ title: who + where, body: m.text.slice(0, 160), icon: ICON, silent: false });
   n.on('click', () => {
     if (!win) return;
@@ -185,6 +185,7 @@ function maybeNotify(m) {
 
 const str = (v, max = 4000) => (typeof v === 'string' ? v.slice(0, max) : '');
 const int = (v) => (Number.isSafeInteger(v) && v > 0 ? v : 0);
+const ids = (v, max) => (Array.isArray(v) ? v.map(int).filter(Boolean).slice(0, max) : []);
 
 // Ответ всегда { ok, data } или { ok: false, error }: интерфейс показывает понятный текст по коду ошибки.
 function handle(channel, fn) {
@@ -295,6 +296,7 @@ function registerIpc() {
   handle('ai:updateChat', (a) => {
     const body = {};
     for (const k of ['title', 'system', 'summary', 'model']) if (typeof a[k] === 'string') body[k] = str(a[k], 6000);
+    if (Array.isArray(a.skills)) body.skills = ids(a.skills, 50);
     return client.request('PATCH', chatPath(a), body);
   });
   handle('ai:deleteChat', (a) => client.request('DELETE', chatPath(a)));
@@ -307,7 +309,7 @@ function registerIpc() {
     aiStreams.set(id, ctrl);
     let last = null;
     try {
-      await client.stream(path, { text: str(a.text, 20000) }, (ev) => {
+      await client.stream(path, { text: str(a.text, 20000), notes: ids(a.notes, 10) }, (ev) => {
         if (ev.t === 'done' || ev.t === 'error') last = ev;
         send('ai:event', { chatId: id, ...ev });
       }, ctrl.signal);
@@ -319,6 +321,17 @@ function registerIpc() {
       aiStreams.delete(id);
     }
   });
+  handle('ai:estimate', (a) => client.request('POST', chatPath(a) + '/estimate', { text: str(a.text, 20000), notes: ids(a.notes, 10) }));
+  handle('ai:skills', () => client.request('GET', '/api/ai/skills'));
+  const notePath = (a) => {
+    const id = int(a.id);
+    if (!id) throw Object.assign(new Error('not_found'), { code: 'not_found' });
+    return '/api/ai/notes/' + id;
+  };
+  handle('ai:notes', () => client.request('GET', '/api/ai/notes'));
+  handle('ai:addNote', (a) => client.request('POST', '/api/ai/notes', { title: str(a.title, 200), body: str(a.body, 60000) }));
+  handle('ai:editNote', (a) => client.request('PATCH', notePath(a), { title: str(a.title, 200), body: str(a.body, 60000) }));
+  handle('ai:deleteNote', (a) => client.request('DELETE', notePath(a)));
   handle('ai:stop', (a) => {
     const c = aiStreams.get(int(a.chatId));
     if (c) c.abort();
@@ -337,10 +350,30 @@ function registerIpc() {
     return client.request('PUT', '/api/admin/ai/users/' + id, { enabled: a.enabled !== false, model: str(a.model, 80), pools });
   });
   handle('admin:aiDefaults', (a) => client.request('PUT', '/api/admin/ai/defaults', { model: str(a.model, 80) }));
+  handle('admin:aiSystem', (a) => client.request('PUT', '/api/admin/ai/system', { system: str(a.system, 4000) }));
+  const skillBody = (a) => ({ name: str(a.name, 80), descr: str(a.descr, 300), prompt: str(a.prompt, 4000) });
+  handle('admin:aiAddSkill', (a) => client.request('POST', '/api/admin/ai/skills', skillBody(a)));
+  handle('admin:aiEditSkill', (a) => {
+    const id = int(a.id);
+    if (!id) throw Object.assign(new Error('not_found'), { code: 'not_found' });
+    return client.request('PUT', '/api/admin/ai/skills/' + id, skillBody(a));
+  });
+  handle('admin:aiDeleteSkill', (a) => {
+    const id = int(a.id);
+    if (!id) throw Object.assign(new Error('not_found'), { code: 'not_found' });
+    return client.request('DELETE', '/api/admin/ai/skills/' + id);
+  });
+  handle('admin:aiModel', (a) => {
+    const name = str(a.name, 80);
+    if (!/^[\w.:-]{1,80}$/.test(name)) throw Object.assign(new Error('bad_input'), { code: 'bad_input' });
+    return client.request('PUT', '/api/admin/ai/models/' + encodeURIComponent(name), { ctx: int(a.ctx) });
+  });
   handle('admin:aiPool', (a) => {
     const name = str(a.name, 40);
     if (!poolName(name)) throw Object.assign(new Error('bad_input'), { code: 'bad_input' });
-    return client.request('PUT', '/api/admin/ai/pools/' + name, { daily: int(a.daily), userDaily: int(a.userDaily), userMax: int(a.userMax) });
+    const body = { daily: int(a.daily), userDaily: int(a.userDaily), userMax: int(a.userMax) };
+    if (typeof a.unlimited === 'boolean') body.unlimited = a.unlimited;
+    return client.request('PUT', '/api/admin/ai/pools/' + name, body);
   });
 
   // Инструменты кузницы

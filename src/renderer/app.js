@@ -301,7 +301,11 @@ studio.chat.onOpenRoom((room) => {
 
 // ---------- события сервера ----------
 
+// Обсуждения карточек (комнаты card:<id>) ведёт главная, в home.js.
+const isTopicEvent = (ev) => ((ev.m && ev.m.room) || ev.room || '').startsWith('card:');
+
 studio.chat.onEvent((ev) => {
+  if (isTopicEvent(ev)) return;
   switch (ev.t) {
     case 'ready':
       S.me = ev.me;

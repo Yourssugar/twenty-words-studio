@@ -1,8 +1,13 @@
 #!/usr/bin/env node
-// Сборка установщика и выпуск новой версии: npm run release
+// Выпуск новой версии одной командой: npm run release
 //
-// 1. Поднимите версию в package.json ("version"), например 0.4.0 -> 0.4.1, закоммитьте и запушьте.
-// 2. npm run release
+// Что делает по порядку:
+// 1. Проверяет вход в GitHub CLI и адрес сервера в data/config.json.
+// 2. Если в папке есть изменения, сохраняет их в git (commit) и отправляет на GitHub (push).
+// 3. Создаёт релиз v<версия из package.json>, собирает установщик и загружает его.
+//
+// Версию в package.json поднимает тот, кто прислал обновление. Если такая версия уже
+// выпущена, скрипт остановится и попросит поднять номер.
 //
 // Токен GitHub берётся из GitHub CLI (gh auth login делается один раз) и живёт только
 // в памяти на время сборки. Файлов с токеном в папке нет.
@@ -37,11 +42,40 @@ if (!/^https:\/\//.test(config.serverUrl || '')) {
   process.exit(1);
 }
 
-// Релиз создаём заранее сами: electron-builder иногда создаёт его дважды и получает 422.
+function git(args) {
+  return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+}
+
+// Уже выпущенную версию не перезаписываем: у людей она уже стоит.
+let existing = null;
 try {
-  gh(['release', 'view', tag, '--repo', full]);
-  console.log(`Релиз ${tag} уже есть, загружаю файлы в него.`);
+  existing = JSON.parse(gh(['release', 'view', tag, '--repo', full, '--json', 'assets']));
 } catch {
+  /* релиза ещё нет */
+}
+if (existing && existing.assets && existing.assets.some((a) => a.name.endsWith('.exe'))) {
+  console.error(`Версия ${version} уже выпущена. Поднимите "version" в package.json (например, ${version.replace(/(\d+)$/, (n) => Number(n) + 1)}) и запустите снова.`);
+  process.exit(1);
+}
+
+// Изменения в папке: сохраняем и отправляем на GitHub.
+try {
+  if (git(['status', '--porcelain'])) {
+    git(['add', '-A']);
+    git(['commit', '-m', `Twenty Words Studio ${version}`]);
+    console.log('Изменения сохранены в git.');
+  }
+  git(['push']);
+  console.log('Код отправлен на GitHub.');
+} catch (err) {
+  console.error('Не получилось сохранить или отправить код в git:\n' + ((err.stderr || '') + (err.stdout || '') || err.message));
+  process.exit(1);
+}
+
+// Релиз создаём заранее сами: electron-builder иногда создаёт его дважды и получает 422.
+if (existing) {
+  console.log(`Релиз ${tag} уже есть, загружаю файлы в него.`);
+} else {
   gh(['release', 'create', tag, '--repo', full, '--title', version, '--notes', `Twenty Words Studio ${version}`]);
   console.log(`Создан релиз ${tag}.`);
 }

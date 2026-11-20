@@ -10,7 +10,11 @@ const B = {
   open: null, // id открытой ветки
   hover: null,
   loaded: false,
-  expanded: new Set(), // раскрытые карточки в списке
+  topic: null, // id карточки, обсуждение которой открыто
+  topicMsgs: new Map(),
+  topicMore: false,
+  typingTimer: 0,
+  lastTyping: 0,
 };
 
 const G = {
@@ -37,6 +41,7 @@ async function loadBoard() {
     B.loaded = true;
     syncNodes();
     renderDrawer();
+    updateHomeBadge();
   } catch (err) {
     if (err.code !== 'unauthorized') toast(errText(err.code));
   }
@@ -53,22 +58,87 @@ function branchById(id) {
 studio.chat.onEvent((ev) => {
   if (ev.t === 'ready') {
     loadBoard();
+    if (B.topic) loadTopic(B.topic);
     return;
   }
   if (ev.t === 'userGone' && ev.deleted) {
     for (const [id, c] of B.cards) if (c.author === ev.user) B.cards.delete(id);
+    if (B.topic && !B.cards.has(B.topic)) B.topic = null;
     renderDrawer();
     return;
   }
-  if (ev.t !== 'board') return;
-  if (ev.op === 'card') B.cards.set(ev.card.id, ev.card);
-  else if (ev.op === 'cardGone') B.cards.delete(ev.id);
-  else if (ev.op === 'branch') {
-    const i = B.branches.findIndex((b) => b.id === ev.branch.id);
-    if (i >= 0) B.branches[i] = ev.branch;
+  if (ev.t === 'board') {
+    if (ev.op === 'card') {
+      // Счётчики обсуждения у каждого свои: при правке карточки их не затираем.
+      const old = B.cards.get(ev.card.id);
+      B.cards.set(ev.card.id, old ? { ...ev.card, msgs: old.msgs, unread: old.unread, last: old.last } : ev.card);
+    } else if (ev.op === 'cardGone') {
+      B.cards.delete(ev.id);
+      if (B.topic === ev.id) {
+        B.topic = null;
+        toast('Тему удалили');
+      }
+    } else if (ev.op === 'branch') {
+      const i = B.branches.findIndex((b) => b.id === ev.branch.id);
+      if (i >= 0) B.branches[i] = ev.branch;
+    }
+    renderDrawer();
+    if (B.hover) showTip(B.hover);
+    return;
   }
-  renderDrawer();
-  if (B.hover) showTip(B.hover);
+  // Сообщения в обсуждениях карточек
+  const room = (ev.m && ev.m.room) || ev.room || '';
+  if (!room.startsWith('card:')) return;
+  const cardId = Number(room.slice(5));
+  const card = B.cards.get(cardId);
+  if (ev.t === 'msg') {
+    const m = ev.m;
+    if (card) {
+      card.msgs = (card.msgs || 0) + 1;
+      card.last = m.ts;
+    }
+    const open = B.topic === cardId && S.view === 'home';
+    if (open) {
+      B.topicMsgs.set(m.id, m);
+      if (m.user !== S.me.id && document.hasFocus()) studio.chat.send({ t: 'read', room, id: m.id });
+      else if (m.user !== S.me.id && card) card.unread = (card.unread || 0) + 1;
+      renderTopicLog(m.user === S.me.id);
+    } else if (card && m.user !== S.me.id) {
+      card.unread = (card.unread || 0) + 1;
+    }
+    if (!open) renderDrawer();
+    updateHomeBadge();
+  } else if (ev.t === 'edit' && B.topic === cardId) {
+    B.topicMsgs.set(ev.m.id, ev.m);
+    renderTopicLog();
+  } else if (ev.t === 'delete') {
+    if (card) card.msgs = Math.max(0, (card.msgs || 1) - 1);
+    if (B.topic === cardId && B.topicMsgs.delete(ev.id)) renderTopicLog();
+  } else if (ev.t === 'read' && card) {
+    card.unread = 0;
+    updateHomeBadge();
+    if (!B.topic) renderDrawer();
+  } else if (ev.t === 'typing' && B.topic === cardId) {
+    const u = S.users.get(ev.user);
+    const el = document.getElementById('topic-typing');
+    if (el && u) {
+      el.textContent = u.name + ' печатает...';
+      clearTimeout(B.typingTimer);
+      B.typingTimer = setTimeout(() => (el.textContent = ''), 4000);
+    }
+  }
+});
+
+function updateHomeBadge() {
+  let total = 0;
+  for (const c of B.cards.values()) total += c.unread || 0;
+  const badge = $('badge-home');
+  badge.hidden = !total;
+  badge.textContent = total > 99 ? '99+' : total;
+}
+
+window.addEventListener('focus', () => {
+  if (B.topic && S.view === 'home') markTopicRead();
 });
 
 // ---------- геометрия ----------
@@ -160,7 +230,7 @@ function frame(now) {
   if (document.hidden) return;
   const t = (now - G.t0) / 1000;
   const ctx = G.ctx;
-  const targetShift = B.open ? Math.min(200, G.w * 0.16) : 0;
+  const targetShift = B.topic ? Math.min(290, G.w * 0.22) : B.open ? Math.min(200, G.w * 0.16) : 0;
   G.shift += (targetShift - G.shift) * 0.12;
 
   ctx.setTransform(G.dpr, 0, 0, G.dpr, 0, 0);
@@ -379,17 +449,18 @@ function onClick(e) {
   else if (B.open) closeBranch();
 }
 
-// ---------- список карточек ветки ----------
+// ---------- список карточек ветки и обсуждение карточки ----------
 
 function openBranch(id) {
   B.open = id;
-  B.expanded.clear();
+  B.topic = null;
   hideTip();
   renderDrawer();
 }
 
 function closeBranch() {
   B.open = null;
+  B.topic = null;
   renderDrawer();
 }
 
@@ -397,9 +468,22 @@ function canEdit(c) {
   return S.me && (c.author === S.me.id || S.me.role === 'admin');
 }
 
+const msgsLabel = (n) => {
+  const d = n % 10;
+  const dd = n % 100;
+  const w = d === 1 && dd !== 11 ? 'сообщение' : d >= 2 && d <= 4 && (dd < 12 || dd > 14) ? 'сообщения' : 'сообщений';
+  return n + ' ' + w;
+};
+
 function renderDrawer() {
   $('home-count').textContent = B.loaded ? 'веток: ' + B.branches.length + ' · карточек: ' + B.cards.size : '';
   const box = $('home-drawer');
+  if (B.topic && B.cards.has(B.topic)) {
+    renderTopic();
+    return;
+  }
+  B.topic = null;
+  box.classList.remove('is-topic');
   const b = B.open && branchById(B.open);
   if (!b) {
     box.hidden = true;
@@ -419,29 +503,195 @@ function renderDrawer() {
   );
   const list = h('div', { class: 'drawer-list' });
   const cards = cardsOf(b.id);
-  if (!cards.length) list.append(h('div', { class: 'drawer-empty muted', text: 'Пока пусто. Добавьте первую карточку.' }));
+  if (!cards.length) list.append(h('div', { class: 'drawer-empty muted', text: 'Пока пусто. Добавьте первую карточку: заголовок и пару строк о сути, обсуждать будем внутри.' }));
   for (const c of cards) {
     const u = S.users.get(c.author) || { name: 'участник' };
-    const open = B.expanded.has(c.id);
-    const item = h('div', { class: 'bcard' + (open ? ' is-open' : '') },
-      h('button', { class: 'bcard-head', onclick: () => { open ? B.expanded.delete(c.id) : B.expanded.add(c.id); renderDrawer(); } },
+    const talk = c.msgs ? msgsLabel(c.msgs) + (c.last ? ', последнее ' + dayLabel(c.last).toLowerCase() : '') : 'обсуждения ещё нет';
+    list.append(h('button', { class: 'bcard', onclick: () => openTopic(c.id) },
+      h('div', { class: 'bcard-head' },
         avatar(u, 22),
-        h('div', { class: 'grow' }, h('div', { class: 'bcard-title', text: c.title }), h('div', { class: 'bcard-meta', text: u.name + ' · ' + dayLabel(c.created) + (c.updated > c.created + 1000 ? ' · изменено' : '') })),
+        h('div', { class: 'grow' },
+          h('div', { class: 'bcard-title', text: c.title }),
+          h('div', { class: 'bcard-meta', text: u.name + ' · ' + dayLabel(c.created) }),
+        ),
+        c.unread ? h('span', { class: 'badge', text: c.unread > 99 ? '99+' : c.unread }) : null,
       ),
-      open ? h('div', { class: 'bcard-body' }, c.body ? h('div', { class: 'msg-text' }, linkify(c.body)) : h('div', { class: 'muted small', text: 'Без описания.' })) : null,
-      open && canEdit(c) ? h('div', { class: 'row gap-s bcard-actions' },
-        h('button', { class: 'btn btn-s', text: 'Изменить', onclick: () => editCard(c, b.id) }),
-        h('button', { class: 'btn btn-s btn-danger-ghost', text: 'Удалить', onclick: () => deleteCard(c) }),
-      ) : null,
-    );
-    list.append(item);
+      c.body ? h('div', { class: 'bcard-preview', text: c.body.length > 140 ? c.body.slice(0, 138).trim() + '...' : c.body }) : null,
+      h('div', { class: 'bcard-talk', text: talk }),
+    ));
   }
   box.append(head, tools, list);
 }
 
+// ---------- обсуждение карточки ----------
+
+async function openTopic(id) {
+  B.topic = id;
+  B.topicMsgs = new Map();
+  B.topicMore = false;
+  renderDrawer();
+  await loadTopic(id);
+}
+
+async function loadTopic(id, before) {
+  try {
+    const r = await call(studio.api.messages('card:' + id, before));
+    if (B.topic !== id) return;
+    for (const m of r.messages) B.topicMsgs.set(m.id, m);
+    B.topicMore = r.messages.length === 50;
+  } catch (err) {
+    if (err.code !== 'no_access') toast(errText(err.code));
+    return;
+  }
+  renderTopicLog(!before);
+  if (!before) markTopicRead();
+}
+
+function markTopicRead() {
+  const c = B.cards.get(B.topic);
+  if (!c || !B.topicMsgs.size) return;
+  const last = Math.max(...B.topicMsgs.keys());
+  studio.chat.send({ t: 'read', room: 'card:' + c.id, id: last });
+  if (c.unread) {
+    c.unread = 0;
+    updateHomeBadge();
+  }
+}
+
+function backToBranch() {
+  B.topic = null;
+  renderDrawer();
+}
+
+function renderTopic() {
+  const box = $('home-drawer');
+  const c = B.cards.get(B.topic);
+  const b = branchById(c.branch) || { title: '', color: '#e9a23b' };
+  B.open = c.branch;
+  box.hidden = false;
+  box.classList.add('is-topic');
+  box.style.setProperty('--c', b.color);
+  // Поле ввода не пересоздаём, чтобы не терять набранный текст.
+  let composer = document.getElementById('topic-form');
+  const keep = composer && composer.dataset.card === String(c.id);
+  box.innerHTML = '';
+  const u = S.users.get(c.author) || { name: 'участник' };
+  const head = h('div', { class: 'drawer-head topic-head' },
+    h('button', { class: 'btn btn-s', text: 'Назад', title: 'К списку карточек ветки', onclick: backToBranch }),
+    h('div', { class: 'grow topic-crumb', text: b.title }),
+    h('button', { class: 'btn btn-s', text: 'Закрыть', onclick: closeBranch }),
+  );
+  const card = h('div', { class: 'topic-card' },
+    h('div', { class: 'drawer-title', text: c.title }),
+    h('div', { class: 'row gap-s topic-author' }, avatar(u, 20), h('span', { class: 'muted small', text: u.name + ' · ' + dayLabel(c.created) + (c.updated > c.created + 1000 ? ' · изменено' : '') })),
+    c.body ? h('div', { class: 'msg-text topic-body' }, linkify(c.body)) : null,
+    canEdit(c) ? h('div', { class: 'row gap-s' },
+      h('button', { class: 'btn btn-s', text: 'Изменить', onclick: () => editCard(c, c.branch) }),
+      h('button', { class: 'btn btn-s btn-danger-ghost', text: 'Удалить тему', onclick: () => deleteCard(c) }),
+    ) : null,
+  );
+  const log = h('div', { class: 'topic-log', id: 'topic-log' });
+  log.addEventListener('scroll', async () => {
+    if (log.scrollTop > 40 || !B.topicMore || B.topicLoading) return;
+    const before = Math.min(...B.topicMsgs.keys());
+    const oldH = log.scrollHeight;
+    B.topicLoading = true;
+    await loadTopic(c.id, before);
+    B.topicLoading = false;
+    log.scrollTop = log.scrollHeight - oldH;
+  });
+  if (!keep) composer = topicComposer(c.id);
+  box.append(head, card, h('div', { class: 'topic-label muted small', text: 'Обсуждение' }), log, h('div', { class: 'topic-typing muted small', id: 'topic-typing' }), composer);
+  renderTopicLog(true);
+}
+
+function topicComposer(cardId) {
+  const ta = h('textarea', { rows: '1', maxlength: '4000', placeholder: 'Написать в обсуждение. Enter отправить, Shift+Enter новая строка' });
+  const form = h('form', { class: 'composer topic-composer', id: 'topic-form', dataset: { card: String(cardId) } }, ta, h('button', { class: 'btn btn-accent', type: 'submit', text: 'Отправить' }));
+  const size = () => {
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
+  };
+  ta.addEventListener('input', () => {
+    size();
+    if (ta.value && Date.now() - B.lastTyping > 2500) {
+      B.lastTyping = Date.now();
+      studio.chat.send({ t: 'typing', room: 'card:' + cardId });
+    }
+  });
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = ta.value.trim();
+    if (!text) return;
+    const ok = await call(studio.chat.send({ t: 'send', room: 'card:' + cardId, text, cid: Math.random().toString(36).slice(2, 10) }));
+    if (!ok) {
+      toast('Нет связи с сервером. Сообщение не отправлено.');
+      return;
+    }
+    ta.value = '';
+    B.lastTyping = 0;
+    size();
+  });
+  setTimeout(() => ta.focus(), 30);
+  return form;
+}
+
+function renderTopicLog(stick) {
+  const log = document.getElementById('topic-log');
+  if (!log) return;
+  const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+  log.innerHTML = '';
+  const list = [...B.topicMsgs.values()].sort((a, b) => a.id - b.id);
+  if (B.topicMore) log.append(h('div', { class: 'log-more', text: 'Прокрутите вверх, чтобы загрузить раньше' }));
+  if (!list.length) log.append(h('div', { class: 'drawer-empty muted', text: 'Обсуждения пока нет. Напишите первым.' }));
+  let prev = null;
+  for (const m of list) {
+    const day = dayLabel(m.ts);
+    if (!prev || dayLabel(prev.ts) !== day) log.append(h('div', { class: 'day', text: day }));
+    const compact = prev && prev.user === m.user && m.ts - prev.ts < 5 * 60 * 1000 && dayLabel(prev.ts) === day;
+    log.append(topicMessage(m, compact));
+    prev = m;
+  }
+  if (stick || nearBottom) log.scrollTop = log.scrollHeight;
+}
+
+function topicMessage(m, compact) {
+  const u = S.users.get(m.user) || { name: 'Удалённый пользователь' };
+  const mine = m.user === S.me.id;
+  const canDelete = mine || S.me.role === 'admin';
+  const row = h('div', { class: 'msg' + (compact ? ' compact' : '') + (mine ? ' mine' : '') });
+  row.append(compact ? h('span', { class: 'msg-time-side', text: timeOf(m.ts) }) : avatar(u, 30));
+  const body = h('div', { class: 'msg-body' });
+  if (!compact) body.append(h('div', { class: 'msg-head' }, h('span', { class: 'msg-name', text: u.name }), h('span', { class: 'msg-time', text: timeOf(m.ts) })));
+  body.append(h('div', { class: 'msg-text' }, linkify(m.text), m.edited ? h('span', { class: 'edited', text: ' (изменено)' }) : null));
+  row.append(body);
+  if (mine || canDelete) {
+    row.append(h('div', { class: 'msg-actions' },
+      mine ? h('button', { class: 'mini', text: 'изменить', onclick: () => editTopicMessage(m) }) : null,
+      canDelete ? h('button', { class: 'mini', text: 'удалить', onclick: () => deleteMessage(m) }) : null,
+    ));
+  }
+  return row;
+}
+
+async function editTopicMessage(m) {
+  const ta = h('textarea', { rows: '4', maxlength: '4000' });
+  ta.value = m.text;
+  setTimeout(() => ta.focus(), 30);
+  if (!(await modal({ title: 'Изменить сообщение', body: ta, ok: 'Сохранить' }))) return;
+  const text = ta.value.trim();
+  if (text && text !== m.text) studio.chat.send({ t: 'edit', id: m.id, text });
+}
+
 async function editCard(card, branch) {
-  const title = h('input', { maxlength: '80', placeholder: 'Коротко: о чём карточка' });
-  const body = h('textarea', { rows: '8', maxlength: '4000', placeholder: 'Подробно: что, зачем, ссылки' });
+  const title = h('input', { maxlength: '80', placeholder: 'Тема: коротко, о чём речь' });
+  const body = h('textarea', { rows: '8', maxlength: '4000', placeholder: 'Суть: что, зачем, ссылки. Обсуждение будет внутри карточки.' });
   title.value = card ? card.title : '';
   body.value = card ? card.body : '';
   const form = h('div', {}, h('label', { class: 'field' }, h('span', { text: 'Заголовок' }), title), h('label', { class: 'field' }, h('span', { text: 'Текст' }), body));
@@ -451,8 +701,12 @@ async function editCard(card, branch) {
     const saved = card
       ? await call(studio.board.edit(card.id, title.value, body.value))
       : await call(studio.board.add(branch, title.value, body.value));
-    B.cards.set(saved.id, saved);
-    B.expanded.add(saved.id);
+    const old = B.cards.get(saved.id);
+    B.cards.set(saved.id, old ? { ...saved, msgs: old.msgs, unread: old.unread, last: old.last } : saved);
+    if (!card) {
+      openTopic(saved.id);
+      return;
+    }
     renderDrawer();
   } catch (err) {
     toast(errText(err.code));
@@ -460,11 +714,13 @@ async function editCard(card, branch) {
 }
 
 async function deleteCard(c) {
-  if (!(await modal({ title: 'Удалить карточку?', body: '«' + c.title + '» исчезнет у всех.', ok: 'Удалить', danger: true }))) return;
+  if (!(await modal({ title: 'Удалить тему?', body: '"' + c.title + '" исчезнет у всех вместе с обсуждением.', ok: 'Удалить', danger: true }))) return;
   try {
     await call(studio.board.remove(c.id));
     B.cards.delete(c.id);
+    if (B.topic === c.id) B.topic = null;
     renderDrawer();
+    updateHomeBadge();
   } catch (err) {
     toast(errText(err.code));
   }
@@ -489,6 +745,7 @@ async function editBranch(b) {
 // ---------- вход и выход со страницы ----------
 
 function openHome() {
+  if (B.topic) setTimeout(markTopicRead, 50);
   if (!G.canvas) {
     G.canvas = $('home-canvas');
     G.ctx = G.canvas.getContext('2d');

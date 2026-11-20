@@ -58,7 +58,7 @@
   <section id="app" class="app" hidden>
     <nav class="rail">
       <img class="rail-logo" src="../assets/icon.png" alt="Twenty Words Studio">
-      <button class="rail-btn is-on" data-view="home" title="Главная"><span class="ico" data-ico="home"></span><span>Главная</span></button>
+      <button class="rail-btn is-on" data-view="home" title="Главная"><span class="ico" data-ico="home"></span><span>Главная</span><i class="rail-badge" id="badge-home" hidden></i></button>
       <button class="rail-btn" data-view="chat" title="Чат"><span class="ico" data-ico="chat"></span><span>Чат</span><i class="rail-badge" id="badge-chat" hidden></i></button>
       <button class="rail-btn" data-view="assistant" title="Ассистент"><span class="ico" data-ico="spark"></span><span>Ассистент</span></button>
       <button class="rail-btn" data-view="tools" title="Инструменты"><span class="ico" data-ico="tools"></span><span>Инструменты</span></button>
@@ -126,15 +126,24 @@
             <button class="btn btn-s" type="button" id="ai-rename-btn">Переименовать</button>
             <button class="btn btn-s btn-danger-ghost" type="button" id="ai-delete-btn">Удалить</button>
           </div>
+          <button class="btn btn-s" type="button" id="ai-notes-btn" title="Свои заметки: код, идеи, памятки">Блокнот</button>
         </header>
         <div class="log ai-log" id="ai-log"></div>
         <div class="ai-quota" id="ai-quota"><div class="bar"><i id="ai-quota-fill"></i></div><span id="ai-quota-text"></span></div>
+        <div class="ai-bar" id="ai-bar">
+          <div class="ai-pop" id="ai-skills-pop" hidden></div>
+          <button class="btn btn-s" type="button" id="ai-skills-btn" title="Навыки дописываются к установке модели в этом чате">Скиллы</button>
+          <button class="btn btn-s" type="button" id="ai-attach-btn" title="Приложить заметки из блокнота к сообщению">Приложить</button>
+          <div class="ai-attach" id="ai-attach"></div>
+          <span class="ai-est" id="ai-est" title="Примерно столько токенов уйдёт в модель с этим сообщением: установка, навыки, памятка, история, вложения и текст"></span>
+        </div>
         <form class="composer" id="ai-composer">
           <textarea id="ai-text" rows="1" placeholder="Сообщение ассистенту. Enter отправить, Shift+Enter новая строка" maxlength="20000"></textarea>
           <button class="btn btn-accent" type="submit" id="ai-send">Отправить</button>
           <button class="btn" type="button" id="ai-stop" hidden>Стоп</button>
         </form>
       </main>
+      <aside class="ai-notes" id="ai-notes" hidden></aside>
     </div>
 
     <!-- Инструменты -->
@@ -187,6 +196,17 @@
 
         <div class="card" id="admin-ai-card">
           <h2>Ассистент</h2>
+          <div class="admin-sub">Установка для всех чатов</div>
+          <p class="muted small">Уходит модели первой в каждом запросе. Правило про блоки кода сервер добавляет сам.</p>
+          <textarea id="aid-system" rows="3" maxlength="4000"></textarea>
+          <div class="row gap-s ai-defaults"><button class="btn btn-s" type="button" id="aid-system-save">Сохранить установку</button></div>
+          <div class="admin-sub">Скиллы</div>
+          <p class="muted small">Каждый человек включает нужные галочкой в своём чате. Текст скилла дописывается к установке.</p>
+          <div id="admin-ai-skills"></div>
+          <div class="row gap-s ai-defaults"><button class="btn btn-s" type="button" id="aid-skill-add">Добавить скилл</button></div>
+          <div class="admin-sub">Модели</div>
+          <div id="admin-ai-models"></div>
+          <div class="admin-sub">Котлы и лимиты</div>
           <div id="admin-ai-pools"></div>
           <div class="row wrap ai-defaults">
             <span class="muted small">Модель по умолчанию для новых чатов:</span>
