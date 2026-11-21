@@ -1,68 +1,296 @@
 {
+  "groups": [
+    {
+      "id": "base",
+      "name": "Основные"
+    },
+    {
+      "id": "fruits",
+      "name": "Фрукты"
+    },
+    {
+      "id": "chars",
+      "name": "Персонажи"
+    },
+    {
+      "id": "portraits",
+      "name": "Портреты"
+    },
+    {
+      "id": "evening",
+      "name": "Пляж и вечер"
+    }
+  ],
   "avatars": [
     {
       "id": "robot",
-      "file": "robot.webp"
+      "file": "robot.webp",
+      "group": "base"
     },
     {
       "id": "cat",
-      "file": "cat.webp"
+      "file": "cat.webp",
+      "group": "base"
     },
     {
       "id": "fox",
-      "file": "fox.webp"
+      "file": "fox.webp",
+      "group": "base"
     },
     {
       "id": "owl",
-      "file": "owl.webp"
+      "file": "owl.webp",
+      "group": "base"
     },
     {
       "id": "ghost",
-      "file": "ghost.webp"
+      "file": "ghost.webp",
+      "group": "base"
     },
     {
       "id": "astronaut",
-      "file": "astronaut.webp"
+      "file": "astronaut.webp",
+      "group": "base"
     },
     {
       "id": "wizard",
-      "file": "wizard.webp"
+      "file": "wizard.webp",
+      "group": "base"
     },
     {
       "id": "knight",
-      "file": "knight.webp"
+      "file": "knight.webp",
+      "group": "base"
     },
     {
       "id": "dragon",
-      "file": "dragon.webp"
+      "file": "dragon.webp",
+      "group": "base"
     },
     {
       "id": "alien",
-      "file": "alien.webp"
+      "file": "alien.webp",
+      "group": "base"
     },
     {
       "id": "panda",
-      "file": "panda.webp"
+      "file": "panda.webp",
+      "group": "base"
     },
     {
       "id": "frog",
-      "file": "frog.webp"
+      "file": "frog.webp",
+      "group": "base"
     },
     {
       "id": "octopus",
-      "file": "octopus.webp"
+      "file": "octopus.webp",
+      "group": "base"
     },
     {
       "id": "bunny",
-      "file": "bunny.webp"
+      "file": "bunny.webp",
+      "group": "base"
     },
     {
       "id": "pumpkin",
-      "file": "pumpkin.webp"
+      "file": "pumpkin.webp",
+      "group": "base"
     },
     {
       "id": "snowman",
-      "file": "snowman.webp"
+      "file": "snowman.webp",
+      "group": "base"
+    },
+    {
+      "id": "strawberry",
+      "file": "strawberry.webp",
+      "group": "fruits"
+    },
+    {
+      "id": "orange",
+      "file": "orange.webp",
+      "group": "fruits"
+    },
+    {
+      "id": "watermelon",
+      "file": "watermelon.webp",
+      "group": "fruits"
+    },
+    {
+      "id": "blueberry",
+      "file": "blueberry.webp",
+      "group": "fruits"
+    },
+    {
+      "id": "apple",
+      "file": "apple.webp",
+      "group": "fruits"
+    },
+    {
+      "id": "pineapple",
+      "file": "pineapple.webp",
+      "group": "fruits"
+    },
+    {
+      "id": "peach",
+      "file": "peach.webp",
+      "group": "fruits"
+    },
+    {
+      "id": "lemon",
+      "file": "lemon.webp",
+      "group": "fruits"
+    },
+    {
+      "id": "pear",
+      "file": "pear.webp",
+      "group": "fruits"
+    },
+    {
+      "id": "cherry",
+      "file": "cherry.webp",
+      "group": "fruits"
+    },
+    {
+      "id": "scholar",
+      "file": "scholar.webp",
+      "group": "chars"
+    },
+    {
+      "id": "baker",
+      "file": "baker.webp",
+      "group": "chars"
+    },
+    {
+      "id": "cosmo",
+      "file": "cosmo.webp",
+      "group": "chars"
+    },
+    {
+      "id": "gardener",
+      "file": "gardener.webp",
+      "group": "chars"
+    },
+    {
+      "id": "fairy",
+      "file": "fairy.webp",
+      "group": "chars"
+    },
+    {
+      "id": "singer",
+      "file": "singer.webp",
+      "group": "chars"
+    },
+    {
+      "id": "postman",
+      "file": "postman.webp",
+      "group": "chars"
+    },
+    {
+      "id": "paleo",
+      "file": "paleo.webp",
+      "group": "chars"
+    },
+    {
+      "id": "sledder",
+      "file": "sledder.webp",
+      "group": "chars"
+    },
+    {
+      "id": "rainy",
+      "file": "rainy.webp",
+      "group": "chars"
+    },
+    {
+      "id": "magician",
+      "file": "magician.webp",
+      "group": "chars"
+    },
+    {
+      "id": "brick",
+      "file": "brick.webp",
+      "group": "portraits"
+    },
+    {
+      "id": "violet",
+      "file": "violet.webp",
+      "group": "portraits"
+    },
+    {
+      "id": "silver",
+      "file": "silver.webp",
+      "group": "portraits"
+    },
+    {
+      "id": "greenhouse",
+      "file": "greenhouse.webp",
+      "group": "portraits"
+    },
+    {
+      "id": "snowfall",
+      "file": "snowfall.webp",
+      "group": "portraits"
+    },
+    {
+      "id": "potter",
+      "file": "potter.webp",
+      "group": "portraits"
+    },
+    {
+      "id": "autumn",
+      "file": "autumn.webp",
+      "group": "portraits"
+    },
+    {
+      "id": "rain-walk",
+      "file": "rain-walk.webp",
+      "group": "portraits"
+    },
+    {
+      "id": "harbor",
+      "file": "harbor.webp",
+      "group": "portraits"
+    },
+    {
+      "id": "club-rose",
+      "file": "club-rose.webp",
+      "group": "evening"
+    },
+    {
+      "id": "club-lilac",
+      "file": "club-lilac.webp",
+      "group": "evening"
+    },
+    {
+      "id": "club-teal",
+      "file": "club-teal.webp",
+      "group": "evening"
+    },
+    {
+      "id": "lounge-red",
+      "file": "lounge-red.webp",
+      "group": "evening"
+    },
+    {
+      "id": "lounge-sun",
+      "file": "lounge-sun.webp",
+      "group": "evening"
+    },
+    {
+      "id": "vanity",
+      "file": "vanity.webp",
+      "group": "evening"
+    },
+    {
+      "id": "ivory",
+      "file": "ivory.webp",
+      "group": "evening"
+    },
+    {
+      "id": "amber",
+      "file": "amber.webp",
+      "group": "evening"
     }
   ]
 }

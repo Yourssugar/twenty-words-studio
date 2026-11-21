@@ -1,0 +1,184 @@
+{
+  "themes": [
+    {
+      "id": "dj",
+      "name": "Диджей после полуночи",
+      "bg": "dj",
+      "fx": "bokeh",
+      "vars": {
+        "--bg": "#120a1f",
+        "--panel": "#1a1029",
+        "--panel-2": "#24163a",
+        "--line": "#3a2660",
+        "--muted": "#a99cc4",
+        "--accent": "#c77dff",
+        "--accent-ink": "#160a24"
+      }
+    },
+    {
+      "id": "whales",
+      "name": "Киты в синеве",
+      "bg": "whales",
+      "fx": "deep",
+      "vars": {
+        "--bg": "#06141f",
+        "--panel": "#0b1f2e",
+        "--panel-2": "#112b3f",
+        "--line": "#1d4560",
+        "--muted": "#8fb3c9",
+        "--accent": "#4fc3f7",
+        "--accent-ink": "#03131c"
+      }
+    },
+    {
+      "id": "pool",
+      "name": "Лазурный бассейн",
+      "bg": "pool",
+      "fx": "bokeh",
+      "vars": {
+        "--bg": "#0a1420",
+        "--panel": "#111d2c",
+        "--panel-2": "#18283b",
+        "--line": "#2a4058",
+        "--muted": "#9ab0c4",
+        "--accent": "#2ee6d6",
+        "--accent-ink": "#04201d"
+      }
+    },
+    {
+      "id": "kelp",
+      "name": "Лес из ламинарии",
+      "bg": "kelp",
+      "fx": "deep",
+      "vars": {
+        "--bg": "#07160f",
+        "--panel": "#0d2218",
+        "--panel-2": "#133022",
+        "--line": "#1f4a33",
+        "--muted": "#95bba5",
+        "--accent": "#7bd88f",
+        "--accent-ink": "#06190d"
+      }
+    },
+    {
+      "id": "steel",
+      "name": "Стальной рассвет",
+      "bg": "steel",
+      "fx": "rain",
+      "vars": {
+        "--bg": "#0f1218",
+        "--panel": "#161b24",
+        "--panel-2": "#1e2531",
+        "--line": "#303a4b",
+        "--muted": "#9aa6b8",
+        "--accent": "#ffb547",
+        "--accent-ink": "#1d1200"
+      }
+    },
+    {
+      "id": "jelly",
+      "name": "Медузы в лунной воде",
+      "bg": "jelly",
+      "fx": "bubbles",
+      "vars": {
+        "--bg": "#0a0c1f",
+        "--panel": "#10142c",
+        "--panel-2": "#171d3b",
+        "--line": "#262f5a",
+        "--muted": "#a3a9d1",
+        "--accent": "#b48cff",
+        "--accent-ink": "#140a26"
+      }
+    },
+    {
+      "id": "fire",
+      "name": "Кольцо огня",
+      "bg": "fire",
+      "fx": "embers",
+      "vars": {
+        "--bg": "#170806",
+        "--panel": "#220e0a",
+        "--panel-2": "#30140e",
+        "--line": "#4c2117",
+        "--muted": "#c4a094",
+        "--accent": "#ff6a2b",
+        "--accent-ink": "#1f0800"
+      }
+    },
+    {
+      "id": "neon",
+      "name": "Неон над городом",
+      "bg": "neon",
+      "fx": "bokeh",
+      "vars": {
+        "--bg": "#0d0a1a",
+        "--panel": "#151028",
+        "--panel-2": "#1e1738",
+        "--line": "#33275a",
+        "--muted": "#ab9fca",
+        "--accent": "#ff4fd8",
+        "--accent-ink": "#1f0619"
+      }
+    },
+    {
+      "id": "serpent",
+      "name": "Сад морских змей",
+      "bg": "serpent",
+      "fx": "deep",
+      "vars": {
+        "--bg": "#061619",
+        "--panel": "#0b2226",
+        "--panel-2": "#112f34",
+        "--line": "#1d4b52",
+        "--muted": "#92bcc0",
+        "--accent": "#5fe0c0",
+        "--accent-ink": "#03201a"
+      }
+    },
+    {
+      "id": "comets",
+      "name": "Кузница комет",
+      "bg": "comets",
+      "fx": "embers",
+      "vars": {
+        "--bg": "#140c14",
+        "--panel": "#1e121e",
+        "--panel-2": "#2a192a",
+        "--line": "#432a43",
+        "--muted": "#bba3b8",
+        "--accent": "#ffa24c",
+        "--accent-ink": "#1f0f00"
+      }
+    },
+    {
+      "id": "ship",
+      "name": "Сломанный корабль",
+      "bg": "ship",
+      "fx": "deep",
+      "vars": {
+        "--bg": "#071619",
+        "--panel": "#0c2226",
+        "--panel-2": "#123036",
+        "--line": "#1f4a52",
+        "--muted": "#93bcc2",
+        "--accent": "#f2c94c",
+        "--accent-ink": "#1d1600"
+      }
+    },
+    {
+      "id": "arch",
+      "name": "Арка над бездной",
+      "bg": "arch",
+      "fx": "deep",
+      "vars": {
+        "--bg": "#050f1a",
+        "--panel": "#0a1828",
+        "--panel-2": "#102236",
+        "--line": "#1b3955",
+        "--muted": "#8eaac6",
+        "--accent": "#3fa7ff",
+        "--accent-ink": "#02101f"
+      }
+    }
+  ]
+}

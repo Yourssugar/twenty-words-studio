@@ -223,6 +223,32 @@ function hexA(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
+// Насыщенный и светлый вариант цвета ветки: граф должен читаться поверх яркой картинки темы.
+const VIVID = new Map();
+function vivid(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex || '')) return '#e9a23b';
+  if (VIVID.has(hex)) return VIVID.get(hex);
+  const n = parseInt(hex.slice(1), 16);
+  let [r, g, b] = [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+  const mx = Math.max(r, g, b);
+  const mn = Math.min(r, g, b);
+  let hh = 0;
+  const d = mx - mn;
+  if (d) hh = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  hh = (hh * 60 + 360) % 360;
+  const l0 = (mx + mn) / 2;
+  const s0 = d ? d / (1 - Math.abs(2 * l0 - 1)) : 0;
+  const sat = Math.min(1, Math.max(s0 * 1.35, s0 > 0.08 ? 0.75 : s0));
+  const l = Math.min(0.7, Math.max(0.6, l0));
+  const c = (1 - Math.abs(2 * l - 1)) * sat;
+  const x = c * (1 - Math.abs(((hh / 60) % 2) - 1));
+  const m = l - c / 2;
+  [r, g, b] = hh < 60 ? [c, x, 0] : hh < 120 ? [x, c, 0] : hh < 180 ? [0, c, x] : hh < 240 ? [0, x, c] : hh < 300 ? [x, 0, c] : [c, 0, x];
+  const out = '#' + [r, g, b].map((v) => Math.round((v + m) * 255).toString(16).padStart(2, '0')).join('');
+  VIVID.set(hex, out);
+  return out;
+}
+
 // ---------- рисование ----------
 
 function resize() {
@@ -257,10 +283,11 @@ function frame(now) {
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#e9a23b';
 
   // свечение центра
+  const acc = vivid(accent.startsWith('#') ? accent : '#e9a23b');
   const glow = ctx.createRadialGradient(L.cx, L.cy, 10, L.cx, L.cy, 190);
-  glow.addColorStop(0, 'rgba(255,255,255,.16)');
-  glow.addColorStop(0.35, 'rgba(255,255,255,.05)');
-  glow.addColorStop(1, 'rgba(255,255,255,0)');
+  glow.addColorStop(0, hexA(acc, 0.28));
+  glow.addColorStop(0.35, hexA(acc, 0.09));
+  glow.addColorStop(1, hexA(acc, 0));
   ctx.fillStyle = glow;
   ctx.fillRect(L.cx - 200, L.cy - 200, 400, 400);
 
@@ -276,21 +303,25 @@ function frame(now) {
     const qx = mx - dy * 0.12;
     const qy = my + dx * 0.12;
     const on = B.hover === b.id || B.open === b.id;
-    ctx.strokeStyle = hexA(b.color, on ? 0.75 : 0.38);
-    ctx.lineWidth = on ? 1.6 : 1.1;
+    const col = vivid(b.color);
+    ctx.strokeStyle = hexA(col, on ? 0.95 : 0.62);
+    ctx.lineWidth = on ? 2.2 : 1.6;
+    ctx.shadowColor = hexA(col, 0.9);
+    ctx.shadowBlur = on ? 12 : 7;
     ctx.beginPath();
     ctx.moveTo(L.cx, L.cy);
     ctx.quadraticCurveTo(qx, qy, p.x, p.y);
     ctx.stroke();
+    ctx.shadowBlur = 0;
     // редкая искра вдоль нити
     const k = ((t * 0.12 + i * 0.17) % 1);
     if (k < 0.85) {
       const u = k / 0.85;
       const ex = (1 - u) * (1 - u) * L.cx + 2 * (1 - u) * u * qx + u * u * p.x;
       const ey = (1 - u) * (1 - u) * L.cy + 2 * (1 - u) * u * qy + u * u * p.y;
-      ctx.fillStyle = hexA(b.color, 0.55 * Math.sin(u * Math.PI));
+      ctx.fillStyle = hexA(col, 0.9 * Math.sin(u * Math.PI));
       ctx.beginPath();
-      ctx.arc(ex, ey, 1.8, 0, Math.PI * 2);
+      ctx.arc(ex, ey, 2.4, 0, Math.PI * 2);
       ctx.fill();
     }
   });
@@ -348,34 +379,43 @@ function frame(now) {
     });
     const count = cardsOf(b.id).length;
     const empty = count === 0;
-    const base = empty ? 0.22 : 0.4;
-    // туманное пятно ветки
+    const col = vivid(b.color);
+    const base = empty ? 0.45 : 0.7;
+    // тёмная подложка и цветное пятно: граф читается поверх любой картинки
+    const shade = ctx.createRadialGradient(p.x, p.y, 10, p.x, p.y, 105);
+    shade.addColorStop(0, 'rgba(6,7,10,.5)');
+    shade.addColorStop(1, 'rgba(6,7,10,0)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(p.x - 110, p.y - 110, 220, 220);
     const fog = ctx.createRadialGradient(p.x, p.y, 4, p.x, p.y, 95);
-    fog.addColorStop(0, hexA(b.color, empty ? 0.07 : 0.13));
-    fog.addColorStop(1, hexA(b.color, 0));
+    fog.addColorStop(0, hexA(col, empty ? 0.12 : 0.22));
+    fog.addColorStop(1, hexA(col, 0));
     ctx.fillStyle = fog;
     ctx.fillRect(p.x - 100, p.y - 100, 200, 200);
 
-    ctx.strokeStyle = hexA(b.color, base + f * 0.35);
-    ctx.lineWidth = 0.8;
+    ctx.shadowColor = hexA(col, 0.95);
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = hexA(col, Math.min(1, base + f * 0.3));
+    ctx.lineWidth = 1.1;
     ctx.beginPath();
     for (const [a, c] of node.edges) {
       ctx.moveTo(pts[a].x, pts[a].y);
       ctx.lineTo(pts[c].x, pts[c].y);
     }
     ctx.stroke();
-    ctx.fillStyle = hexA(b.color, empty ? 0.5 : 0.85);
+    ctx.fillStyle = hexA(col, empty ? 0.75 : 1);
     for (const q of pts) {
       ctx.beginPath();
-      ctx.arc(q.x, q.y, 1.5, 0, Math.PI * 2);
+      ctx.arc(q.x, q.y, 2, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.shadowBlur = 0;
     // уголки-рамка вокруг ветки под курсором
     if (f > 0.05) {
       const s = 50;
       const l = 14;
-      ctx.strokeStyle = hexA(b.color, 0.8 * f);
-      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = hexA(col, 0.95 * f);
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
       for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
         ctx.moveTo(p.x + sx * s, p.y + sy * (s - l));
@@ -390,13 +430,18 @@ function frame(now) {
     ctx.textBaseline = 'middle';
     ctx.font = '600 13px "Segoe UI", system-ui, sans-serif';
     ctx.letterSpacing = '1px';
-    ctx.fillStyle = empty ? 'rgba(232,230,225,.55)' : 'rgba(240,238,233,.95)';
-    ctx.shadowColor = 'rgba(0,0,0,.8)';
-    ctx.shadowBlur = 6;
+    ctx.fillStyle = empty ? 'rgba(236,234,229,.78)' : '#ffffff';
+    ctx.shadowColor = 'rgba(0,0,0,.95)';
+    ctx.shadowBlur = 8;
     ctx.fillText(b.title.toUpperCase(), p.x, p.y);
-    ctx.font = '10.5px Consolas, "Cascadia Mono", monospace';
+    ctx.shadowColor = hexA(col, 0.7);
+    ctx.shadowBlur = 14;
+    ctx.fillText(b.title.toUpperCase(), p.x, p.y);
+    ctx.font = '600 10.5px Consolas, "Cascadia Mono", monospace';
     ctx.letterSpacing = '1.5px';
-    ctx.fillStyle = hexA(b.color, empty ? 0.45 : 0.8);
+    ctx.fillStyle = hexA(col, empty ? 0.75 : 1);
+    ctx.shadowColor = 'rgba(0,0,0,.95)';
+    ctx.shadowBlur = 6;
     const sub = (b.note ? shortNote(b.note) + ' · ' : '') + count;
     ctx.fillText(sub.toUpperCase(), p.x, p.y + 64);
     ctx.shadowBlur = 0;
@@ -413,7 +458,15 @@ function frame(now) {
   ctx.arc(L.cx, L.cy, 44, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-  ctx.strokeStyle = hexA(accent.startsWith('#') ? accent : '#e9a23b', 0.35);
+  ctx.fillStyle = 'rgba(18,19,23,.9)';
+  ctx.shadowColor = hexA(acc, 0.8);
+  ctx.shadowBlur = 18;
+  ctx.beginPath();
+  ctx.arc(L.cx, L.cy, 44, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = hexA(acc, 0.75);
+  ctx.lineWidth = 1.4;
   ctx.setLineDash([2, 5]);
   ctx.beginPath();
   ctx.arc(L.cx, L.cy, 54 + Math.sin(t * 0.6) * 1.5 * (typeof motionAmp === 'function' ? motionAmp() : 1), 0, Math.PI * 2);
@@ -716,7 +769,12 @@ function renderTopic() {
 function topicComposer(cardId) {
   const ta = h('textarea', { rows: '1', maxlength: '4000', placeholder: 'Написать в обсуждение. Enter отправить, Shift+Enter новая строка' });
   const proj = h('button', { class: 'btn', type: 'button', text: 'Проект', title: 'Прикрепить снимок своего проекта к обсуждению', onclick: () => shareProjectTo('card:' + cardId) });
-  const form = h('form', { class: 'composer topic-composer', id: 'topic-form', dataset: { card: String(cardId) } }, ta, proj, h('button', { class: 'btn btn-accent', type: 'submit', text: 'Отправить' }));
+  const imgBtn = h('button', { class: 'btn btn-ico', type: 'button', title: 'Картинка: кнопкой, Ctrl+V или перетащить сюда' });
+  const strip = h('div', { class: 'att-strip', hidden: true });
+  const attach = new Attacher(strip);
+  const form = h('form', { class: 'composer topic-composer', id: 'topic-form', dataset: { card: String(cardId) } }, imgBtn, ta, proj, h('button', { class: 'btn btn-accent', type: 'submit', text: 'Отправить' }));
+  bindAttach({ input: ta, dropZone: form, button: imgBtn, attacher: attach, allowed: () => true });
+  form.prepend(strip);
   const size = () => {
     ta.style.height = 'auto';
     ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
@@ -737,12 +795,8 @@ function topicComposer(cardId) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = ta.value.trim();
-    if (!text) return;
-    const ok = await call(studio.chat.send({ t: 'send', room: 'card:' + cardId, text, cid: Math.random().toString(36).slice(2, 10) }));
-    if (!ok) {
-      toast('Нет связи с сервером. Сообщение не отправлено.');
-      return;
-    }
+    if (!text && !attach.count) return;
+    if (!(await sendWithImages('card:' + cardId, text, attach))) return;
     ta.value = '';
     B.lastTyping = 0;
     size();
@@ -778,7 +832,9 @@ function topicMessage(m, compact) {
   row.append(compact ? h('span', { class: 'msg-time-side', text: timeOf(m.ts) }) : avatar(u, 30));
   const body = h('div', { class: 'msg-body' });
   if (!compact) body.append(h('div', { class: 'msg-head' }, h('span', { class: 'msg-name', text: u.name }), h('span', { class: 'msg-time', text: timeOf(m.ts) })));
-  body.append(h('div', { class: 'msg-text' }, linkify(m.text), m.edited ? h('span', { class: 'edited', text: ' (изменено)' }) : null));
+  if (m.text || m.edited) body.append(h('div', { class: 'msg-text' }, linkify(m.text), m.edited ? h('span', { class: 'edited', text: ' (изменено)' }) : null));
+  const imgs = msgImages(m);
+  if (imgs) body.append(imgs);
   if (m.snap && typeof snapCard === 'function') body.append(snapCard(m.snap));
   row.append(body);
   if (mine || canDelete) {

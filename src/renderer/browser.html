@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+  <title>Браузер</title>
+  <link rel="stylesheet" href="browser.css">
+</head>
+<body>
+  <!-- Полоса вкладок. Кнопки окна справа рисует Windows. -->
+  <header class="b-tabs" id="b-tabs">
+    <div class="b-tab-list" id="b-tab-list"></div>
+    <button class="b-ibtn b-newtab" id="b-newtab" type="button" title="Новая вкладка (Ctrl+T)"></button>
+  </header>
+
+  <!-- Панель адреса -->
+  <div class="b-bar">
+    <button class="b-ibtn" id="b-back" type="button" title="Назад (Alt+Влево)"></button>
+    <button class="b-ibtn" id="b-fwd" type="button" title="Вперёд (Alt+Вправо)"></button>
+    <button class="b-ibtn" id="b-reload" type="button" title="Обновить (F5)"></button>
+    <button class="b-ibtn" id="b-home" type="button" title="Закладки"></button>
+    <form class="b-addr" id="b-addr-form">
+      <input id="b-addr" spellcheck="false" autocomplete="off" placeholder="Поиск в Google или адрес сайта">
+    </form>
+    <div class="b-toasts" id="b-toasts"></div>
+    <button class="b-zoom" id="b-zoom" type="button" title="Обычный масштаб (Ctrl+0)" hidden></button>
+    <button class="b-ibtn" id="b-mark" type="button" title="Добавить в закладки (Ctrl+D)"></button>
+  </div>
+
+  <!-- Стартовая страница: закладки и поиск. Сайты открываются поверх неё. -->
+  <main class="b-start" id="b-start">
+    <div class="b-start-in">
+      <form class="b-search" id="b-search-form">
+        <input id="b-search" spellcheck="false" autocomplete="off" placeholder="Поиск в Google или адрес сайта">
+      </form>
+      <div class="b-marks" id="b-marks"></div>
+      <div class="b-start-foot">
+        <button class="b-link" id="b-reset" type="button" hidden>Вернуть стандартные закладки</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Страница не открылась -->
+  <main class="b-error" id="b-error" hidden>
+    <div class="b-error-in">
+      <h1 id="b-error-title">Страница не открылась</h1>
+      <p class="b-muted" id="b-error-text"></p>
+      <button class="b-btn b-btn-accent" id="b-error-retry" type="button">Повторить</button>
+    </div>
+  </main>
+
+  <script src="themes.js"></script>
+  <script src="browser-ui.js"></script>
+</body>
+</html>

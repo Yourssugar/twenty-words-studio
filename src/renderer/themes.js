@@ -1,14 +1,8 @@
 'use strict';
-// Темы оформления. Палитры и фоны сезонов взяты из Twenty Words Launcher,
-// раскладка и графитовая основа остаются студийными. Анимаций у тем нет.
+// Темы оформления. Сезонные палитры и фоны взяты из Twenty Words Launcher.
+// Остальные темы лежат в assets/themes/themes.json (см. loadExtraThemes).
 
 const THEMES = [
-  {
-    id: 'workshop',
-    name: 'Мастерская',
-    vars: { '--bg': '#0f1012', '--panel': '#15161a', '--panel-2': '#1b1d22', '--line': '#2a2d35', '--muted': '#8b8e98', '--accent': '#e9a23b', '--accent-ink': '#1b1305' },
-    bg: null,
-  },
   {
     id: 'spring',
     name: 'Весна',
@@ -35,6 +29,14 @@ const THEMES = [
   },
 ];
 
+// Темы из assets/themes/themes.json (их проверяет главный процесс) встают после сезонных.
+async function loadExtraThemes() {
+  try {
+    const list = await call(studio.app.themes());
+    for (const t of list) if (!THEMES.some((x) => x.id === t.id)) THEMES.push(t);
+  } catch {}
+}
+
 // «По сезону»: весна с марта, лето с июня, осень с сентября, зима с декабря.
 function seasonNow(d = new Date()) {
   const m = d.getMonth();
@@ -46,7 +48,7 @@ function seasonNow(d = new Date()) {
 
 function resolveTheme(id) {
   const real = id === 'auto' || !id ? seasonNow() : id;
-  return THEMES.find((t) => t.id === real) || THEMES[0];
+  return THEMES.find((t) => t.id === real) || THEMES.find((t) => t.id === seasonNow());
 }
 
 function applyTheme(id) {

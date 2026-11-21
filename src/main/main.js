@@ -12,6 +12,7 @@ const { Tools, registerScheme } = require('./tools');
 const { Runner, schemePrivileges } = require('./runner');
 const { setupUpdater } = require('./updater');
 const { Music, musicPrivileges } = require('./music');
+const { Browser } = require('./browser');
 
 const ROOT = path.join(__dirname, '..', '..');
 const RENDERER = path.join(__dirname, '..', 'renderer', 'index.html');
@@ -24,6 +25,7 @@ let tools = null;
 let updater = null;
 let runner = null;
 let music = null;
+let browser = null;
 const names = new Map(); // id -> имя, для текста уведомлений
 const aiStreams = new Map(); // чат ассистента -> AbortController текущего ответа
 let myId = 0;
@@ -46,7 +48,30 @@ function writeJson(file, data) {
 }
 
 const config = readJson(path.join(ROOT, 'data', 'config.json'), {});
-const THEME_IDS = ['auto', 'workshop', 'spring', 'summer', 'autumn', 'winter'];
+const THEME_IDS = ['auto', 'spring', 'summer', 'autumn', 'winter'];
+
+// Дополнительные темы: assets/themes/themes.json + картинка фона рядом (id.webp).
+// Цвета только #rrggbb и только из списка переменных ниже, так файл не может подмешать в страницу ничего лишнего.
+const THEME_VARS = ['--bg', '--panel', '--panel-2', '--line', '--muted', '--accent', '--accent-ink', '--text'];
+const THEME_FX = ['snow', 'leaves', 'petals', 'fireflies', 'dust', 'bubbles', 'deep', 'embers', 'rain', 'bokeh', 'none'];
+function loadExtraThemes() {
+  const dir = path.join(__dirname, '..', 'assets', 'themes');
+  const j = readJson(path.join(dir, 'themes.json'), { themes: [] });
+  const out = [];
+  for (const t of Array.isArray(j.themes) ? j.themes : []) {
+    if (!t || !/^[a-z0-9-]{1,40}$/.test(t.id || '') || THEME_IDS.includes(t.id) || out.some((x) => x.id === t.id)) continue;
+    const vars = {};
+    for (const k of THEME_VARS) if (/^#[0-9a-f]{6}$/i.test((t.vars || {})[k] || '')) vars[k] = t.vars[k];
+    if (!vars['--bg'] || !vars['--accent']) continue;
+    const bg = /^[a-z0-9-]{1,40}$/.test(t.bg || '') && fs.existsSync(path.join(dir, t.bg + '.webp')) ? t.bg : null;
+    // Маленькая картинка для плитки в настройках: <bg>-thumb.webp, если есть.
+    const thumb = bg && fs.existsSync(path.join(dir, bg + '-thumb.webp')) ? bg + '-thumb' : bg;
+    out.push({ id: t.id, name: (typeof t.name === 'string' && t.name.slice(0, 40)) || t.id, vars, bg, thumb, fx: THEME_FX.includes(t.fx) ? t.fx : 'dust' });
+  }
+  return out;
+}
+const EXTRA_THEMES = loadExtraThemes();
+THEME_IDS.push(...EXTRA_THEMES.map((t) => t.id));
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 
 // Настройки оформления, музыки и окон: ключ -> [проверка, значение по умолчанию].
@@ -67,12 +92,14 @@ const LOOK = {
   uiSounds: [isBool, true],
   musicAuto: [isBool, false], // включать музыку при запуске
   musicPauseMin: [isBool, true], // пауза, когда окно свёрнуто
+  musicPauseWeb: [isBool, true], // пауза, пока во встроенном браузере играет звук
   musicVolume: [numIn(0, 1), 0.5],
   musicSource: [oneOf('studio', 'folder', 'radio', 'ambient'), 'studio'],
   musicFolder: [(x) => typeof x === 'string' && x.length < 1000, ''],
   musicRadio: [numIn(0, 19), 0],
   musicAmbient: [oneOf('rain', 'wind', 'ocean', 'fire', 'pink', 'brown'), 'rain'],
   editorsMode: [oneOf('window', 'maximized', 'fullscreen'), 'window'],
+  linksInBrowser: [isBool, true], // ссылки из чата: во встроенном браузере или в системном
   gpuHigh: [isBool, true], // мощная видеокарта, если их две
   gpuAccel: [isBool, true], // аппаратное ускорение (выключать только при сбоях)
 };
@@ -244,10 +271,14 @@ function createWindow() {
     },
   });
 
-  // Никаких переходов внутри окна. Ссылки из чата открываются в обычном браузере.
+  // Никаких переходов внутри окна. Ссылки из чата открываются во встроенном браузере
+  // или в системном, по настройке.
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    if (/^https?:\/\//i.test(url)) {
+      if (getSettings().linksInBrowser && browser) browser.open(url);
+      else shell.openExternal(url);
+    }
     return { action: 'deny' };
   });
   win.webContents.on('before-input-event', (e, input) => {
@@ -339,7 +370,8 @@ const ids = (v, max) => (Array.isArray(v) ? v.map(int).filter(Boolean).slice(0, 
 // Ответ всегда { ok, data } или { ok: false, error }: интерфейс показывает понятный текст по коду ошибки.
 function handle(channel, fn) {
   ipcMain.handle(channel, async (event, arg) => {
-    if (!event.senderFrame || !event.senderFrame.url.startsWith('file://')) return { ok: false, error: 'forbidden' };
+    // Только главное окно: у панели встроенного браузера свои каналы (browser.js).
+    if (!win || event.sender !== win.webContents || !event.senderFrame || !event.senderFrame.url.startsWith('file://')) return { ok: false, error: 'forbidden' };
     try {
       return { ok: true, data: await fn(arg || {}) };
     } catch (err) {
@@ -484,8 +516,46 @@ function registerIpc() {
     if (a.text !== undefined) obj.text = str(a.text, 4000);
     if (a.cid !== undefined) obj.cid = str(a.cid, 64);
     if (a.id !== undefined) obj.id = int(a.id);
+    if (Array.isArray(a.images)) obj.images = a.images.slice(0, 6).map(int).filter(Boolean);
     return client.send(obj);
   });
+
+  // Картинки в чате, подчаты, баг-репорты
+  const b64img = (v, max) => {
+    if (typeof v !== 'string' || v.length > max || !/^[A-Za-z0-9+/=]+$/.test(v)) throw Object.assign(new Error('bad_image'), { code: 'bad_image' });
+    return v;
+  };
+  const dim = (v) => (Number.isSafeInteger(v) && v > 0 && v <= 8000 ? v : 0);
+  handle('chatimg:upload', (a) =>
+    client.request('POST', '/api/chat/images', { room: str(a.room, 64), image: b64img(a.image, 4_300_000), w: dim(a.w), h: dim(a.h) }, { timeout: 60000 }));
+  handle('chatimg:get', async (a) => {
+    const r = await client.fetchBytes('/api/chat/images/' + need(a.id));
+    if (r.type !== 'image/webp') throw Object.assign(new Error('bad_image'), { code: 'bad_image' });
+    return 'data:image/webp;base64,' + r.bytes.toString('base64');
+  });
+  handle('subrooms:list', () => client.request('GET', '/api/subrooms'));
+  handle('subrooms:add', (a) => client.request('POST', '/api/subrooms', { parent: str(a.parent, 16), title: str(a.title, 80) }));
+  handle('subrooms:rename', (a) => client.request('PATCH', '/api/subrooms/' + need(a.id), { title: str(a.title, 80) }));
+  handle('subrooms:delete', (a) => client.request('DELETE', '/api/subrooms/' + need(a.id)));
+  handle('tickets:list', () => client.request('GET', '/api/tickets'));
+  handle('tickets:add', (a) =>
+    client.request('POST', '/api/tickets', {
+      title: str(a.title, 200),
+      body: str(a.body, 4000),
+      app: app.getVersion() + ' ' + process.platform + ' ' + os.release(),
+      images: (Array.isArray(a.images) ? a.images : []).slice(0, 6).map((x) => ({ data: b64img(x && x.data, 4_300_000), w: dim(x.w), h: dim(x.h) })),
+    }, { timeout: 120000 }));
+  handle('tickets:rename', (a) => client.request('PATCH', '/api/tickets/' + need(a.id), { title: str(a.title, 200) }));
+  handle('tickets:review', (a) =>
+    client.request('POST', '/api/tickets/' + need(a.id) + '/review', {
+      verdict: ['visual', 'vuln', 'notbug', 'dup', ''].includes(a.verdict) ? a.verdict : '',
+      note: str(a.note, 1000),
+      dupOf: int(a.dupOf),
+      qty: Number.isFinite(a.qty) ? a.qty : 0,
+      points: Number.isFinite(a.points) ? a.points : 0,
+      amount: Number.isFinite(a.amount) ? a.amount : 0,
+    }));
+  handle('tickets:delete', (a) => client.request('DELETE', '/api/tickets/' + need(a.id)));
 
   handle('api:me', () => client.request('GET', '/api/me'));
   handle('api:updateMe', (a) => {
@@ -718,6 +788,7 @@ function registerIpc() {
     if (a.musicRadios !== undefined) patch.musicRadios = cleanRadios(a.musicRadios);
     const after = saveSettings(patch);
     if (patch.zoom && win) win.webContents.setZoomFactor(after.zoom / 100);
+    if (patch.theme && browser) browser.themeChanged();
     if (patch.gpuHigh !== undefined && process.platform === 'win32') setWindowsGpuPreference(after.gpuHigh);
     // Видеокарта и ускорение меняются только при запуске.
     after.restartNeeded = STARTUP.gpuHigh !== after.gpuHigh || STARTUP.gpuAccel !== after.gpuAccel;
@@ -770,12 +841,21 @@ function registerIpc() {
     return !!(win && win.isFullScreen());
   });
   handle('app:gpu', () => gpuInfo());
+  handle('app:themes', () => EXTRA_THEMES);
+  handle('browser:open', (a) => {
+    browser.open(typeof a.url === 'string' && /^https?:\/\//i.test(a.url) ? a.url.slice(0, 2000) : undefined);
+    return true;
+  });
   // Список готовых аватарок: assets/avatars/avatars.json (новые добавляются туда и файлом рядом).
   handle('app:avatars', () => {
-    const list = readJson(path.join(__dirname, '..', 'assets', 'avatars', 'avatars.json'), { avatars: [] }).avatars || [];
-    return list
+    const j = readJson(path.join(__dirname, '..', 'assets', 'avatars', 'avatars.json'), { avatars: [] });
+    const list = (Array.isArray(j.avatars) ? j.avatars : [])
       .filter((a) => a && /^[a-z0-9-]{1,40}$/.test(a.id || '') && fs.existsSync(path.join(__dirname, '..', 'assets', 'avatars', a.id + '.webp')))
-      .map((a) => a.id);
+      .map((a) => ({ id: a.id, group: str(a.group, 40) || 'base' }));
+    const groups = (Array.isArray(j.groups) ? j.groups : [])
+      .filter((g) => g && typeof g.id === 'string')
+      .map((g) => ({ id: str(g.id, 40), name: str(g.name, 60) || g.id }));
+    return { list, groups };
   });
   handle('app:relaunch', () => {
     app.relaunch();
@@ -822,6 +902,11 @@ if (!app.requestSingleInstanceLock()) {
       },
     });
     music = new Music({ config, settings: getSettings });
+    browser = new Browser({
+      icon: ICON,
+      themeOf: () => ({ theme: getSettings().theme, extra: EXTRA_THEMES }),
+      onAudio: (on) => send('browser:audio', { on }),
+    });
     music.setupProtocol();
     registerIpc();
     createWindow();

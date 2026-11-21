@@ -59,7 +59,7 @@ applyTheme = function (id) {
   return t;
 };
 
-const SECTION_NAMES = { home: 'Главная', chat: 'Чат', projects: 'Проекты', assistant: 'Ассистент', contrib: 'Вклад', tools: 'Инструменты', admin: 'Админ', profile: 'Профиль' };
+const SECTION_NAMES = { home: 'Главная', chat: 'Чат', projects: 'Проекты', assistant: 'Ассистент', contrib: 'Вклад', bugs: 'Баг-репорты', tools: 'Инструменты', admin: 'Админ', profile: 'Профиль' };
 function setTitleSection(view) {
   const el = $('tb-section');
   if (el) el.textContent = SECTION_NAMES[view] || '';
@@ -142,8 +142,8 @@ async function renderLookSettings(s) {
   dim.addEventListener('input', () => applyLook({ bgDim: Number(dim.value) }));
   dim.addEventListener('change', () => saveLook({ bgDim: Number(dim.value) }));
   look.append(
-    checkOf('Картинка сезона на фоне главной и входа', s.bgImage, (v) => saveLook({ bgImage: v })),
-    checkOf('Частицы сезона поверх картинки: снег, листья, лепестки, светлячки', s.particles, (v) => saveLook({ particles: v })),
+    checkOf('Картинка темы на фоне главной и входа', s.bgImage, (v) => saveLook({ bgImage: v })),
+    checkOf('Частицы поверх картинки: снег, листья, пузыри, искры, дождь, огни', s.particles, (v) => saveLook({ particles: v })),
     h('div', { class: 'field' }, h('span', { text: 'Затемнение картинки: ' + s.bgDim + '%' }), dim),
     h('div', { class: 'field' }, h('span', { text: 'Анимации' }),
       segOf([['auto', 'Как в Windows'], ['all', 'Все'], ['soft', 'Мягкие'], ['off', 'Выключены']], s.motion, (v) => saveLook({ motion: v }))),
@@ -158,6 +158,7 @@ async function renderLookSettings(s) {
   snd.append(
     checkOf('Включать музыку при запуске приложения', s.musicAuto, (v) => saveLook({ musicAuto: v })),
     checkOf('Останавливать музыку, когда приложение свёрнуто', s.musicPauseMin, (v) => saveLook({ musicPauseMin: v })),
+    checkOf('Ставить музыку на паузу, пока во встроенном браузере играет видео или звук', s.musicPauseWeb, (v) => saveLook({ musicPauseWeb: v })),
     checkOf('Тихие звуки интерфейса: новое сообщение, подтверждённый отчёт, напоминание', s.uiSounds, (v) => { saveLook({ uiSounds: v }); if (v) setTimeout(() => uiSound('ok'), 50); }),
     h('p', { class: 'muted small', text: 'Источник музыки, свою папку, радио и фоновые звуки выбирают в плеере: нажмите на название трека в полосе заголовка.' }),
   );
@@ -169,6 +170,7 @@ async function renderLookSettings(s) {
     h('div', { class: 'field' }, h('span', { text: 'Редакторы и запуск проектов открывать' }),
       segOf([['window', 'Окном'], ['maximized', 'Развёрнутыми'], ['fullscreen', 'Во весь экран']], s.editorsMode, (v) => saveLook({ editorsMode: v }))),
     h('p', { class: 'muted small', text: 'F11 в любом окне студии: во весь экран и обратно. Размер и положение главного окна запоминаются.' }),
+    checkOf('Ссылки из чата открывать во встроенном браузере (иначе в браузере Windows)', s.linksInBrowser, (v) => saveLook({ linksInBrowser: v })),
     checkOf('Мощная видеокарта, если в компьютере их две (ноутбуки с NVIDIA или AMD)', s.gpuHigh, (v) => saveLook({ gpuHigh: v })),
     checkOf('Аппаратное ускорение (выключать, только если окна мигают или рисуются с ошибками)', s.gpuAccel, (v) => saveLook({ gpuAccel: v })),
     gpuLine,

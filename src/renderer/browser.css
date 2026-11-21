@@ -1,0 +1,134 @@
+/* Панель встроенного браузера. Цвета берутся из темы студии (themes.js). */
+:root {
+  --bg: #0f1012;
+  --panel: #15161a;
+  --panel-2: #1b1d22;
+  --line: #2a2d35;
+  --text: #e8e6e1;
+  --muted: #8b8e98;
+  --accent: #e9a23b;
+  --accent-ink: #1b1305;
+  --hover: color-mix(in srgb, var(--panel-2) 80%, #ffffff);
+  --strip: color-mix(in srgb, var(--bg) 70%, #000000);
+  --theme-bg: none;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--bg); color: var(--text);
+  font: 13px/1.4 "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+button { font: inherit; color: inherit; }
+input { font: inherit; color: var(--text); }
+svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: block; }
+
+/* вкладки: 36px, как полоса окна */
+.b-tabs {
+  height: 36px; flex: none; display: flex; align-items: flex-end; gap: 4px;
+  padding: 0 150px 0 8px; background: var(--strip);
+  -webkit-app-region: drag; user-select: none;
+}
+.b-tab-list { display: flex; gap: 2px; min-width: 0; flex: 0 1 auto; overflow: hidden; height: 30px; }
+.b-tab {
+  -webkit-app-region: no-drag;
+  display: flex; align-items: center; gap: 7px;
+  width: 220px; min-width: 44px; flex: 0 1 220px; height: 30px; padding: 0 6px 0 10px;
+  border-radius: 8px 8px 0 0; color: var(--muted); cursor: default;
+  background: transparent; border: 1px solid transparent; border-bottom: 0;
+}
+.b-tab:hover { background: color-mix(in srgb, var(--panel) 60%, transparent); color: var(--text); }
+.b-tab.is-on { background: var(--panel); color: var(--text); border-color: var(--line); }
+.b-tab.drag-over { box-shadow: inset 2px 0 0 var(--accent); }
+.b-tab-ico { width: 16px; height: 16px; flex: none; display: grid; place-items: center; border-radius: 4px; overflow: hidden; }
+.b-tab-ico img { width: 16px; height: 16px; object-fit: contain; }
+.b-letter { width: 16px; height: 16px; border-radius: 4px; display: grid; place-items: center; font-size: 10px; font-weight: 700; background: var(--panel-2); color: var(--muted); }
+.b-spin { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.b-tab-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.b-tab-x, .b-tab-sound { width: 20px; height: 20px; flex: none; display: grid; place-items: center; border: 0; background: none; border-radius: 5px; color: var(--muted); padding: 0; cursor: pointer; }
+.b-tab-x svg, .b-tab-sound svg { width: 12px; height: 12px; }
+.b-tab-sound svg { width: 14px; height: 14px; }
+.b-tab-x:hover, .b-tab-sound:hover { background: var(--hover); color: var(--text); }
+.b-tab-sound.is-muted { color: var(--accent); }
+.b-tab.narrow .b-tab-title, .b-tab.narrow .b-tab-x { display: none; }
+.b-tab.narrow { justify-content: center; padding: 0; }
+.b-tab.narrow.is-on .b-tab-x { display: grid; }
+.b-tab.narrow.is-on .b-tab-ico { display: none; }
+
+.b-ibtn {
+  -webkit-app-region: no-drag;
+  width: 30px; height: 30px; flex: none; display: grid; place-items: center;
+  border: 0; border-radius: 7px; background: none; color: var(--muted); cursor: pointer; padding: 0;
+}
+.b-ibtn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.b-ibtn:disabled { opacity: .35; cursor: default; }
+.b-ibtn.is-on { color: var(--accent); }
+.b-ibtn.is-on svg { fill: currentColor; }
+.b-newtab { margin-bottom: 3px; width: 28px; height: 26px; }
+
+/* панель адреса: 42px */
+.b-bar {
+  height: 42px; flex: none; display: flex; align-items: center; gap: 2px; padding: 0 8px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.b-addr { flex: 1; min-width: 0; margin: 0 6px; }
+.b-addr input, .b-search input {
+  width: 100%; height: 30px; padding: 0 12px; border-radius: 15px;
+  border: 1px solid var(--line); background: var(--bg); outline: none;
+}
+.b-addr input:focus, .b-search input:focus { border-color: var(--accent); }
+.b-zoom { border: 1px solid var(--line); background: none; border-radius: 12px; height: 24px; padding: 0 8px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.b-zoom:hover { color: var(--text); border-color: var(--accent); }
+
+/* стартовая страница */
+.b-start, .b-error {
+  flex: 1; min-height: 0; overflow-y: auto;
+  background: linear-gradient(color-mix(in srgb, var(--bg) 78%, transparent), var(--bg)), var(--theme-bg) center / cover no-repeat, var(--bg);
+}
+.b-start-in { max-width: 860px; margin: 0 auto; padding: 9vh 24px 40px; }
+.b-search input { height: 46px; border-radius: 23px; padding: 0 20px; font-size: 15px; background: color-mix(in srgb, var(--panel) 92%, transparent); }
+.b-marks { margin-top: 34px; display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 12px; }
+.b-mark {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 16px 10px 12px; border-radius: 12px; cursor: pointer; text-align: center;
+  background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line);
+  transition: border-color .15s, transform .15s;
+}
+.b-mark:hover { border-color: var(--accent); transform: translateY(-1px); }
+.b-mark-ico { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--panel-2); overflow: hidden; }
+.b-mark-ico img { width: 28px; height: 28px; object-fit: contain; }
+.b-mark-ico .b-big-letter { font-size: 18px; font-weight: 700; color: var(--accent); }
+.b-mark-name { font-weight: 600; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.b-mark-host { color: var(--muted); font-size: 11px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.b-mark-tools { position: absolute; top: 4px; right: 4px; display: none; gap: 2px; }
+.b-mark:hover .b-mark-tools { display: flex; }
+.b-mark-tools button { width: 22px; height: 22px; border: 0; border-radius: 6px; background: var(--panel-2); color: var(--muted); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.b-mark-tools button:hover { color: var(--text); background: var(--hover); }
+.b-mark-tools svg { width: 12px; height: 12px; }
+.b-mark-add { border-style: dashed; color: var(--muted); justify-content: center; }
+.b-mark-add:hover { color: var(--text); }
+.b-mark-form { cursor: default; gap: 6px; padding: 10px; }
+.b-mark-form:hover { transform: none; }
+.b-mark-form input { width: 100%; height: 28px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); outline: none; }
+.b-mark-form input:focus { border-color: var(--accent); }
+.b-mark-form .b-row { display: flex; gap: 6px; width: 100%; }
+.b-mark-form .b-btn { flex: 1; }
+.b-start-foot { margin-top: 18px; text-align: center; }
+.b-link { background: none; border: 0; color: var(--muted); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.b-link:hover { color: var(--text); }
+.b-btn { height: 28px; padding: 0 12px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; }
+.b-btn:hover { border-color: var(--accent); }
+.b-btn-accent { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.b-muted { color: var(--muted); }
+
+.b-error-in { max-width: 520px; margin: 0 auto; padding: 16vh 24px 0; }
+.b-error h1 { font-size: 20px; margin: 0 0 8px; }
+.b-error p { margin: 0 0 18px; word-break: break-word; }
+
+.b-toasts { display: flex; gap: 6px; flex: none; max-width: 45%; }
+.b-toast { background: var(--panel-2); border: 1px solid var(--accent); border-radius: 13px; height: 26px; padding: 0 12px; display: flex; gap: 10px; align-items: center; white-space: nowrap; overflow: hidden; min-width: 0; }
+.b-toast span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.b-toast .b-link { padding: 0; }

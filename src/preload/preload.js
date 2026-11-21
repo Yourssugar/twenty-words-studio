@@ -154,9 +154,31 @@ contextBridge.exposeInMainWorld('studio', {
     notify: (title, body) => call('app:notify', { title, body }),
     gpu: () => call('app:gpu'),
     avatars: () => call('app:avatars'),
+    themes: () => call('app:themes'),
     relaunch: () => call('app:relaunch'),
     restart: () => call('app:restart'),
     onUpdate: on('app:update'),
+  },
+  chatImages: {
+    upload: (room, image, w, h) => call('chatimg:upload', { room, image, w, h }),
+    get: (id) => call('chatimg:get', { id }),
+  },
+  subrooms: {
+    list: () => call('subrooms:list'),
+    add: (parent, title) => call('subrooms:add', { parent, title }),
+    rename: (id, title) => call('subrooms:rename', { id, title }),
+    remove: (id) => call('subrooms:delete', { id }),
+  },
+  tickets: {
+    list: () => call('tickets:list'),
+    add: (t) => call('tickets:add', t),
+    rename: (id, title) => call('tickets:rename', { id, title }),
+    review: (id, r) => call('tickets:review', { id, ...r }),
+    remove: (id) => call('tickets:delete', { id }),
+  },
+  browser: {
+    open: (url) => call('browser:open', { url }),
+    onAudio: on('browser:audio'),
   },
   win: {
     titlebar: (color, symbol) => call('win:titlebar', { color, symbol }),

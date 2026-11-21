@@ -82,6 +82,19 @@ function onWindowHidden(hidden) {
   }
 }
 
+// Во встроенном браузере заиграло видео или звук: музыка студии ждёт.
+function onBrowserAudio(on) {
+  if (!PL.s || !PL.s.musicPauseWeb) return;
+  if (on && PL.playing) {
+    PL.webPaused = true;
+    stopMusic(true);
+  } else if (!on && PL.webPaused) {
+    PL.webPaused = false;
+    if (!PL.autoPaused) playMusic();
+  }
+}
+studio.browser.onAudio((d) => onBrowserAudio(!!d.on));
+
 // ---------- источники ----------
 
 async function loadTracks() {
@@ -107,6 +120,7 @@ function srcFor(t) {
 }
 
 async function playMusic() {
+  PL.webPaused = false;
   if (PL.source === 'ambient') {
     startAmbient(PL.s.musicAmbient);
     PL.playing = true;
@@ -124,7 +138,7 @@ async function playMusic() {
 }
 
 function stopMusic(keepAuto) {
-  if (!keepAuto) PL.autoPaused = false;
+  if (!keepAuto) PL.autoPaused = PL.webPaused = false;
   PL.playing = false;
   if (PL.audio) {
     PL.audio.pause();

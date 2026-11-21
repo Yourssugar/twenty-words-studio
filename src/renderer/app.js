@@ -63,8 +63,14 @@ const ERRORS = {
   bad_model: 'Эта модель недоступна.',
   model_disabled: 'Эта модель для вас закрыта. Выберите другую в шапке чата.',
   bad_pool: 'Такого котла нет на сервере.',
+  no_images: 'В общих комнатах только текст. Картинки можно в подчатах, личных сообщениях и обсуждениях.',
+  bad_image: 'Картинка не подошла. Нужен png, jpg, webp или gif.',
+  too_many: 'Слишком много за сутки. Попробуйте завтра или удалите лишнее.',
+  ticket_closed: 'По тикету уже есть решение, менять его может только основатель.',
+  month_closed: 'Этот месяц в учёте уже закрыт.',
+  bad_input: 'Проверьте, что всё заполнено правильно.',
 };
-const errText = (code) => ERRORS[code] || 'Ошибка: ' + code;
+const errText = (code) => ERRORS[code] || (code ? 'Ошибка: ' + code : 'Не получилось. Попробуйте ещё раз.');
 
 async function call(promise) {
   const res = await promise;
@@ -84,9 +90,10 @@ function toast(text, kind = '') {
   setTimeout(() => el.remove(), 4300);
 }
 
-function modal({ title, body, ok = 'Да', danger = false }) {
+function modal({ title, body, ok = 'Да', danger = false, wide = false }) {
   return new Promise((resolve) => {
     $('modal-title').textContent = title;
+    $('modal').querySelector('.modal-card').classList.toggle('is-wide', wide);
     const box = $('modal-body');
     box.innerHTML = '';
     if (typeof body === 'string') box.append(h('p', { text: body }));
@@ -122,6 +129,7 @@ const ICONS = {
   forge: '<svg viewBox="0 0 24 24"><path d="M4 9h11l4 3H8v5H4zM8 17l-2 3M12 17l2 3"/></svg>',
   chart: '<svg viewBox="0 0 24 24"><path d="M4 20h16M7 17v-5M12 17V7M17 17v-8"/></svg>',
   files: '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6"/></svg>',
+  bug: '<svg viewBox="0 0 24 24"><path d="M8 8a4 4 0 0 1 8 0M7 9h10v5a5 5 0 0 1-10 0zM12 9v10M3 12h4M17 12h4M4 7l3 2M20 7l-3 2M4 18l3-2M20 18l-3-2"/></svg>',
   spark: '<svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg>',
 };
 function icons(root = document) {
@@ -131,7 +139,15 @@ function icons(root = document) {
 const COLORS = ['#e9a23b', '#e5534b', '#3fb68b', '#4fa3ff', '#a371f7', '#ff7eb6', '#2ec4b6', '#c9d1d9'];
 // Готовые аватарки: список приходит из assets/avatars/avatars.json при запуске.
 let PRESETS = ['robot', 'cat', 'fox', 'owl', 'ghost', 'astronaut', 'wizard', 'knight', 'dragon', 'alien', 'panda', 'frog', 'octopus', 'bunny', 'pumpkin', 'snowman'];
-studio.app.avatars().then((r) => { if (r.ok && r.data.length) PRESETS = r.data; }, () => {});
+let AV_LIST = PRESETS.map((id) => ({ id, group: 'base' }));
+let AV_GROUPS = [{ id: 'base', name: 'Основные' }];
+studio.app.avatars().then((r) => {
+  if (!r.ok || !r.data || !r.data.list.length) return;
+  AV_LIST = r.data.list;
+  PRESETS = AV_LIST.map((a) => a.id);
+  const known = new Set(r.data.groups.map((g) => g.id));
+  AV_GROUPS = r.data.groups.concat([...new Set(AV_LIST.map((a) => a.group))].filter((g) => !known.has(g)).map((g) => ({ id: g, name: g })));
+}, () => {});
 
 function avatar(user, size = 32) {
   const a = (user && user.avatar) || {};
@@ -218,6 +234,7 @@ async function showAuth() {
   $('app').hidden = true;
   $('tb-today').hidden = true;
   $('tb-focus').hidden = true;
+  $('tb-browser').hidden = true;
   if (typeof FO !== 'undefined' && FO.on) stopFocus();
   if (typeof closeToday === 'function') closeToday();
   $('auth').hidden = false;
@@ -279,11 +296,14 @@ async function afterRules() {
   setTimeout(() => typeof contribRemind === 'function' && contribRemind(), 2500);
   $('tb-today').hidden = false;
   $('tb-focus').hidden = false;
+  $('tb-browser').hidden = false;
+  if (typeof bugsStart === 'function') bugsStart();
   if (typeof maybeShowToday === 'function') maybeShowToday();
   setTimeout(() => typeof checkMilestones === 'function' && checkMilestones(), 4000);
 }
 
 $('tb-focus').addEventListener('click', () => toggleFocusPanel());
+$('tb-browser').addEventListener('click', () => call(studio.browser.open()).catch(() => {}));
 
 $('tb-today').addEventListener('click', () => {
   if (S.me && typeof showToday === 'function') (TD.open ? closeToday() : showToday());
@@ -308,6 +328,7 @@ function setView(view) {
   if (view === 'assistant' && typeof openAssistant === 'function') openAssistant();
   if (view === 'projects' && typeof openProjects === 'function') openProjects();
   if (view === 'contrib' && typeof openContrib === 'function') openContrib();
+  if (view === 'bugs' && typeof openBugs === 'function') openBugs();
   if (view === 'chat') {
     markRead();
     $('composer-text').focus();
@@ -338,11 +359,16 @@ studio.chat.onOpenRoom((room) => {
 
 // ---------- события сервера ----------
 
-// Обсуждения карточек (комнаты card:<id>) ведёт главная, в home.js.
+// Обсуждения карточек (комнаты card:<id>) ведёт главная, в home.js, обсуждения тикетов bugs.js.
 const isTopicEvent = (ev) => ((ev.m && ev.m.room) || ev.room || '').startsWith('card:');
+const isTicketEvent = (ev) => ((ev.m && ev.m.room) || ev.room || '').startsWith('ticket:');
 
 studio.chat.onEvent((ev) => {
   if (isTopicEvent(ev)) return;
+  if (isTicketEvent(ev)) {
+    if (typeof onTicketChat === 'function') onTicketChat(ev);
+    return;
+  }
   switch (ev.t) {
     case 'ready':
       S.me = ev.me;
@@ -360,7 +386,10 @@ studio.chat.onEvent((ev) => {
 
     case 'msg': {
       const m = ev.m;
-      if (!S.rooms.has(m.room)) S.rooms.set(m.room, { id: m.room, kind: 'dm', peer: peerOf(m.room), unread: 0 });
+      if (!S.rooms.has(m.room)) {
+        if (!m.room.startsWith('dm:')) break;
+        S.rooms.set(m.room, { id: m.room, kind: 'dm', peer: peerOf(m.room), unread: 0 });
+      }
       const r = S.rooms.get(m.room);
       r.last = m;
       const list = S.msgs.get(m.room);
@@ -412,6 +441,12 @@ studio.chat.onEvent((ev) => {
       break;
     case 'reports':
       if (typeof onReportsEvent === 'function') onReportsEvent(ev);
+      break;
+    case 'tickets':
+      if (typeof onTicketsEvent === 'function') onTicketsEvent(ev);
+      break;
+    case 'subroom':
+      onSubroomEvent(ev);
       break;
     case 'presence': {
       const u = S.users.get(ev.user);
@@ -473,7 +508,7 @@ studio.chat.onEvent((ev) => {
 
 function roomTitle(id) {
   const r = S.rooms.get(id);
-  if (r && r.kind === 'public') return r.title;
+  if (r && (r.kind === 'public' || r.kind === 'sub')) return r.title;
   if (id.startsWith('dm:')) {
     const u = S.users.get(peerOf(id));
     return u ? u.name : 'Личная переписка';
@@ -486,16 +521,30 @@ function renderSide() {
   const rooms = $('room-list');
   rooms.innerHTML = '';
   let total = 0;
-  for (const r of S.rooms.values()) {
-    total += r.unread || 0;
+  const all = [...S.rooms.values()];
+  for (const r of all) total += r.unread || 0;
+  for (const r of all) {
     if (r.kind !== 'public') continue;
     rooms.append(
-      h('button', { class: 'item' + (r.id === S.room ? ' is-on' : ''), onclick: () => openRoom(r.id) },
-        h('span', { class: 'hash', text: '#' }),
-        h('span', { class: 'item-name', text: r.title }),
-        r.unread ? h('span', { class: 'badge', text: r.unread > 99 ? '99+' : r.unread }) : null,
+      h('div', { class: 'item-row' },
+        h('button', { class: 'item' + (r.id === S.room ? ' is-on' : ''), onclick: () => openRoom(r.id) },
+          h('span', { class: 'hash', text: '#' }),
+          h('span', { class: 'item-name', text: r.title }),
+          r.unread ? h('span', { class: 'badge', text: r.unread > 99 ? '99+' : r.unread }) : null,
+        ),
+        h('button', { class: 'item-add', type: 'button', title: 'Новый подчат в "' + r.title + '"', text: '+', onclick: () => addSubroom(r.id) }),
       ),
     );
+    // Подчаты этой комнаты, по алфавиту.
+    for (const sr of all.filter((x) => x.kind === 'sub' && x.parent === r.id).sort((a, b) => a.title.localeCompare(b.title, 'ru'))) {
+      rooms.append(
+        h('button', { class: 'item item-sub' + (sr.id === S.room ? ' is-on' : ''), onclick: () => openRoom(sr.id) },
+          h('span', { class: 'hash', text: '-' }),
+          h('span', { class: 'item-name', text: sr.title }),
+          sr.unread ? h('span', { class: 'badge', text: sr.unread > 99 ? '99+' : sr.unread }) : null,
+        ),
+      );
+    }
   }
   const people = $('people-list');
   people.innerHTML = '';
@@ -528,14 +577,87 @@ function renderHeader() {
   if (!S.me) return;
   $('chat-title').textContent = (S.room.startsWith('dm:') ? '' : '# ') + roomTitle(S.room);
   let sub = '';
-  if (S.room === 'work') sub = 'задачи, файлы, решения';
-  else if (S.room === 'free') sub = 'всё остальное';
-  else {
+  const r = S.rooms.get(S.room);
+  const tools = $('chat-tools');
+  tools.innerHTML = '';
+  if (S.room === 'work') sub = 'задачи, решения; только текст, картинки в подчатах';
+  else if (S.room === 'free') sub = 'всё остальное; только текст, картинки в подчатах';
+  else if (r && r.kind === 'sub') {
+    const parent = S.rooms.get(r.parent);
+    sub = 'подчат в "' + (parent ? parent.title : r.parent) + '"';
+    if (S.me.founder || r.by === S.me.id) tools.append(h('button', { class: 'btn btn-s', type: 'button', text: 'Переименовать', onclick: () => renameSubroom(r) }));
+    if (S.me.founder) tools.append(h('button', { class: 'btn btn-s btn-danger', type: 'button', text: 'Удалить подчат', onclick: () => deleteSubroom(r) }));
+  } else {
     const u = S.users.get(peerOf(S.room));
     sub = u ? seenLabel(u) : '';
   }
   $('chat-sub').textContent = sub;
   $('composer-text').placeholder = 'Сообщение: ' + roomTitle(S.room);
+  const imgOk = imagesAllowedIn(S.room);
+  $('composer-img').hidden = !imgOk;
+  if (!imgOk && chatAttach.count) chatAttach.clear();
+}
+
+// ---------- подчаты ----------
+
+function onSubroomEvent(ev) {
+  if (ev.op === 'delete') {
+    S.rooms.delete(ev.room);
+    S.msgs.delete(ev.room);
+    if (S.room === ev.room) {
+      toast('Подчат удалён.');
+      openRoom('work');
+    }
+  } else if (ev.s) {
+    const id = 'sub:' + ev.s.id;
+    const old = S.rooms.get(id) || { unread: 0 };
+    S.rooms.set(id, { ...old, id, kind: 'sub', title: ev.s.title, parent: ev.s.parent, by: ev.s.by });
+    if (S.room === id) renderHeader();
+  }
+  renderSide();
+}
+
+function subroomForm(title, value) {
+  const input = h('input', { maxlength: '60', placeholder: 'Например: Монтаж ролика про игру', value: value || '' });
+  setTimeout(() => input.focus(), 30);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('modal-ok').click();
+  });
+  return { input, body: h('div', { class: 'col gap-s' }, h('p', { class: 'muted small', text: title }), input) };
+}
+
+async function addSubroom(parent) {
+  const pr = S.rooms.get(parent);
+  const f = subroomForm('Подчат в "' + (pr ? pr.title : parent) + '". В нём можно отправлять картинки. Создать может любой, удалить только основатель.');
+  if (!(await modal({ title: 'Новый подчат', body: f.body, ok: 'Создать' })) || !f.input.value.trim()) return;
+  try {
+    const sr = await call(studio.subrooms.add(parent, f.input.value.trim()));
+    onSubroomEvent({ op: 'add', s: sr });
+    setView('chat');
+    openRoom('sub:' + sr.id);
+  } catch (err) {
+    toast(errText(err.code));
+  }
+}
+
+async function renameSubroom(r) {
+  const f = subroomForm('Новое название подчата.', r.title);
+  if (!(await modal({ title: 'Переименовать подчат', body: f.body, ok: 'Сохранить' })) || !f.input.value.trim()) return;
+  try {
+    onSubroomEvent({ op: 'edit', s: await call(studio.subrooms.rename(Number(r.id.slice(4)), f.input.value.trim())) });
+  } catch (err) {
+    toast(errText(err.code));
+  }
+}
+
+async function deleteSubroom(r) {
+  if (!(await modal({ title: 'Удалить подчат "' + r.title + '"?', body: 'Удалятся все сообщения и картинки в нём. Вернуть не получится.', ok: 'Удалить', danger: true }))) return;
+  try {
+    await call(studio.subrooms.remove(Number(r.id.slice(4))));
+    onSubroomEvent({ op: 'delete', room: r.id });
+  } catch (err) {
+    toast(errText(err.code));
+  }
 }
 
 function renderTyping() {
@@ -649,7 +771,9 @@ function renderMessage(m, compact) {
       ta.setSelectionRange(ta.value.length, ta.value.length);
     });
   } else {
-    body.append(h('div', { class: 'msg-text' }, linkify(m.text), m.edited ? h('span', { class: 'edited', text: ' (изменено)' }) : null));
+    if (m.text || m.edited) body.append(h('div', { class: 'msg-text' }, linkify(m.text), m.edited ? h('span', { class: 'edited', text: ' (изменено)' }) : null));
+    const imgs = msgImages(m);
+    if (imgs) body.append(imgs);
     if (m.snap && typeof snapCard === 'function') body.append(snapCard(m.snap));
   }
   row.append(body);
@@ -665,7 +789,9 @@ function renderMessage(m, compact) {
 }
 
 async function deleteMessage(m) {
-  const yes = await modal({ title: 'Удалить сообщение?', body: m.text.length > 200 ? m.text.slice(0, 200) + '...' : m.text, ok: 'Удалить', danger: true });
+  const pics = m.images && m.images.length ? 'Картинок: ' + m.images.length + ', они тоже удалятся.' : '';
+  const text = (m.text.length > 200 ? m.text.slice(0, 200) + '...' : m.text) + (m.text && pics ? '\n\n' : '') + pics;
+  const yes = await modal({ title: 'Удалить сообщение?', body: text, ok: 'Удалить', danger: true });
   if (yes && !(await call(studio.chat.send({ t: 'delete', id: m.id })))) toast('Нет связи с сервером.');
 }
 
@@ -705,15 +831,13 @@ composer.addEventListener('keydown', (e) => {
     $('composer').requestSubmit();
   }
 });
+const chatAttach = new Attacher($('composer-att'));
+bindAttach({ input: composer, dropZone: $('composer'), button: $('composer-img'), attacher: chatAttach, allowed: () => imagesAllowedIn(S.room) });
 $('composer').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = composer.value.trim();
-  if (!text) return;
-  const ok = await call(studio.chat.send({ t: 'send', room: S.room, text, cid: Math.random().toString(36).slice(2, 10) }));
-  if (!ok) {
-    toast('Нет связи с сервером. Сообщение не отправлено.');
-    return;
-  }
+  if (!text && !chatAttach.count) return;
+  if (!(await sendWithImages(S.room, text, chatAttach))) return;
   composer.value = '';
   lastTyping = 0;
   autosize();
@@ -892,8 +1016,47 @@ function renderAvatarPicker() {
   const presets = $('prof-presets');
   presets.innerHTML = '';
   presets.append(h('button', { class: 'preset' + (draftAvatar.type === 'letter' ? ' is-on' : ''), title: 'Буква', onclick: () => { draftAvatar = { type: 'letter', color: draftAvatar.color }; renderAvatarPicker(); } }, avatar({ name: $('prof-name').value || S.me.name, avatar: { type: 'letter', color: draftAvatar.color } }, 40)));
-  for (const id of PRESETS) {
-    presets.append(h('button', { class: 'preset' + (draftAvatar.type === 'preset' && draftAvatar.id === id ? ' is-on' : ''), title: id, onclick: () => { draftAvatar = { type: 'preset', id, color: draftAvatar.color }; renderAvatarPicker(); } }, avatar({ avatar: { type: 'preset', id, color: draftAvatar.color } }, 40)));
+  // В профиле видна первая группа; выбранная из полного списка картинка встаёт следом за ней.
+  const first = AV_LIST.filter((a) => a.group === (AV_GROUPS[0] || {}).id).map((a) => a.id);
+  const shown = draftAvatar.type === 'preset' && PRESETS.includes(draftAvatar.id) && !first.includes(draftAvatar.id) ? first.concat(draftAvatar.id) : first;
+  for (const id of shown) presets.append(presetBtn(id, draftAvatar, () => renderAvatarPicker()));
+  if (AV_LIST.length > first.length) {
+    presets.append(h('button', { class: 'preset preset-all', type: 'button', title: 'Все аватары', onclick: openAvatarList },
+      gridIco(),
+      h('span', { class: 'preset-all-n', text: String(AV_LIST.length) })));
+  }
+}
+
+function gridIco() {
+  const el = h('span', { class: 'preset-all-ico' });
+  el.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>';
+  return el;
+}
+
+function presetBtn(id, target, after) {
+  return h('button', { class: 'preset' + (target.type === 'preset' && target.id === id ? ' is-on' : ''), type: 'button', title: id, onclick: () => {
+    Object.assign(target, { type: 'preset', id });
+    after();
+  } }, avatar({ avatar: { type: 'preset', id, color: target.color } }, 40));
+}
+
+async function openAvatarList() {
+  const pick = { ...draftAvatar };
+  const box = h('div', { class: 'av-all' });
+  const draw = () => {
+    box.innerHTML = '';
+    for (const g of AV_GROUPS) {
+      const ids = AV_LIST.filter((a) => a.group === g.id).map((a) => a.id);
+      if (!ids.length) continue;
+      box.append(h('div', { class: 'av-group' },
+        h('div', { class: 'av-group-name muted small', text: g.name + ' · ' + ids.length }),
+        h('div', { class: 'presets' }, ...ids.map((id) => presetBtn(id, pick, draw)))));
+    }
+  };
+  draw();
+  if (await modal({ title: 'Все аватары', body: box, ok: 'Выбрать', wide: true }) && pick.type === 'preset') {
+    draftAvatar = { type: 'preset', id: pick.id, color: draftAvatar.color };
+    renderAvatarPicker();
   }
 }
 $('prof-name').addEventListener('input', renderAvatarPicker);
@@ -931,7 +1094,7 @@ function renderThemes(current) {
       await call(studio.settings.set({ theme: o.id }));
       renderThemes(o.id);
     } },
-      h('span', { class: 'theme-thumb', style: `--tb:${t.bg ? `url("../assets/themes/${t.bg}.webp")` : 'none'};--tc:${t.vars['--accent']};--tg:${t.vars['--bg']}` }),
+      h('span', { class: 'theme-thumb', style: `--tb:${t.bg ? `url("../assets/themes/${t.thumb || t.bg}.webp")` : 'none'};--tc:${t.vars['--accent']};--tg:${t.vars['--bg']}` }),
       h('span', { class: 'theme-name', text: o.name }),
       o.sub ? h('span', { class: 'theme-sub', text: 'сейчас: ' + o.sub }) : null,
     );
@@ -968,6 +1131,7 @@ icons();
 // иначе ответ главного процесса может прийти раньше, чем они загрузятся.
 window.addEventListener('DOMContentLoaded', async () => {
   try {
+    await loadExtraThemes();
     const s = await call(studio.settings.get());
     applyTheme(s.theme);
     initLook(s);

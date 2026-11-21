@@ -16,6 +16,7 @@
     <span class="tb-section" id="tb-section"></span>
     <button class="tb-btn" id="tb-today" type="button" title="Экран Сегодня" hidden>Сегодня</button>
     <button class="tb-btn" id="tb-focus" type="button" title="Режим фокуса" hidden>Фокус</button>
+    <button class="tb-btn" id="tb-browser" type="button" title="Встроенный браузер: TikTok, YouTube, Instagram и ваши закладки" hidden>Браузер</button>
     <div class="tb-fill"></div>
     <div class="player" id="player">
       <button class="pl-btn" id="pl-play" type="button" title="Играть"></button>
@@ -81,6 +82,7 @@
       <button class="rail-btn" data-view="projects" title="Проекты"><span class="ico" data-ico="files"></span><span>Проекты</span></button>
       <button class="rail-btn" data-view="assistant" title="Ассистент"><span class="ico" data-ico="spark"></span><span>Ассистент</span></button>
       <button class="rail-btn" data-view="contrib" title="Вклад: публикации и скриншоты"><span class="ico" data-ico="chart"></span><span>Вклад</span><i class="rail-badge" id="badge-contrib" hidden></i></button>
+      <button class="rail-btn" data-view="bugs" title="Баг-репорты: нашли ошибку, опишите и приложите скриншоты"><span class="ico" data-ico="bug"></span><span>Баги</span><i class="rail-badge" id="badge-bugs" hidden></i></button>
       <button class="rail-btn" data-view="tools" title="Инструменты"><span class="ico" data-ico="tools"></span><span>Инструменты</span></button>
       <button class="rail-btn" data-view="admin" title="Админ" id="rail-admin" hidden><span class="ico" data-ico="shield"></span><span>Админ</span></button>
       <div class="rail-spacer"></div>
@@ -110,13 +112,18 @@
         <div id="people-list"></div>
       </aside>
       <main class="chat">
-        <header class="chat-head">
-          <div class="chat-title" id="chat-title"></div>
-          <div class="chat-sub" id="chat-sub"></div>
+        <header class="chat-head row between">
+          <div class="grow">
+            <div class="chat-title" id="chat-title"></div>
+            <div class="chat-sub" id="chat-sub"></div>
+          </div>
+          <div class="row gap-s" id="chat-tools"></div>
         </header>
         <div class="log" id="log"></div>
         <div class="typing" id="typing"></div>
+        <div class="att-strip" id="composer-att" hidden></div>
         <form class="composer" id="composer">
+          <button class="btn btn-ico" id="composer-img" type="button" title="Картинка: кнопкой, Ctrl+V или перетащить сюда"></button>
           <textarea id="composer-text" rows="1" placeholder="Сообщение" maxlength="4000"></textarea>
           <button class="btn btn-accent" type="submit" title="Отправить (Enter)">Отправить</button>
         </form>
@@ -132,6 +139,29 @@
         </div>
         <div id="contrib-body"></div>
       </div>
+    </div>
+
+    <!-- Баг-репорты -->
+    <div class="view view-bugs" data-view-pane="bugs" hidden>
+      <aside class="side">
+        <div class="side-head">
+          <div class="side-title">Баг-репорты</div>
+          <div class="muted small" id="bugs-hint">ваши тикеты</div>
+        </div>
+        <div class="side-pad"><button class="btn btn-accent btn-wide" type="button" id="bugs-new">Сообщить о баге</button></div>
+        <div class="side-pad" id="bugs-filter"></div>
+        <div id="bugs-list"></div>
+      </aside>
+      <main class="chat bugs-main">
+        <header class="chat-head row between">
+          <div class="grow">
+            <div class="chat-title" id="bug-title"></div>
+            <div class="chat-sub" id="bug-sub"></div>
+          </div>
+          <div class="row gap-s wrap end" id="bug-tools"></div>
+        </header>
+        <div class="bug-body" id="bug-body"></div>
+      </main>
     </div>
 
     <!-- Проекты -->
@@ -376,6 +406,7 @@
   <div class="toasts" id="toasts"></div>
 
   <script src="themes.js"></script>
+  <script src="chatimg.js"></script>
   <script src="app.js"></script>
   <script src="look.js"></script>
   <script src="player.js"></script>
@@ -392,5 +423,6 @@
   <script src="feed.js"></script>
   <script src="celebrate.js"></script>
   <script src="focus.js"></script>
+  <script src="bugs.js"></script>
 </body>
 </html>

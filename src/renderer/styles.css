@@ -260,6 +260,14 @@ select { cursor: pointer; }
 .swatch.is-on { border-color: var(--text); }
 .preset { background: none; border: 2px solid transparent; border-radius: 12px; padding: 2px; cursor: pointer; }
 .preset.is-on { border-color: var(--accent); }
+.preset-all { width: 48px; height: 48px; display: grid; place-items: center; align-content: center; gap: 1px; border: 1px dashed var(--line); color: var(--muted); }
+.preset-all:hover { color: var(--text); border-color: var(--accent); }
+.preset-all-ico svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; display: block; }
+.preset-all-n { font-size: 10px; line-height: 1; }
+.modal-card.is-wide { width: 720px; max-height: calc(100vh - 120px); display: flex; flex-direction: column; }
+.modal-card.is-wide #modal-body { overflow-y: auto; min-height: 0; padding-right: 4px; }
+.av-group + .av-group { margin-top: 14px; }
+.av-group-name { margin-bottom: 6px; }
 .view-profile input { max-width: 420px; }
 .view-profile .row input { flex: 1; }
 
@@ -755,3 +763,63 @@ html.focus-mode .view-chat .side { display: none; }
 .fo-big { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
 .fo-plans { display: inline-grid; grid-template-columns: repeat(4, auto); }
 .fo-plans .seg-btn { font-size: 12px; padding: 6px 8px; }
+
+/* ---------- подчаты ---------- */
+.item-row { display: flex; align-items: center; margin-right: 6px; }
+.item-row .item { margin-right: 0; flex: 1; width: auto; }
+.item-add { width: 24px; height: 24px; flex: none; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; opacity: 0; }
+.item-row:hover .item-add, .item-add:focus-visible { opacity: 1; }
+.item-add:hover { background: var(--panel-2); color: var(--text); }
+.item-sub { padding-left: 22px; font-size: 13px; }
+.item-sub .hash { width: 14px; color: var(--muted); font-weight: 400; }
+
+/* ---------- картинки в чате ---------- */
+.btn-ico { flex: none; width: 38px; height: 38px; padding: 0; display: grid; place-items: center; }
+.btn-ico svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.composer.drop-on { outline: 2px dashed var(--accent); outline-offset: -4px; border-radius: 10px; }
+.topic-composer { flex-wrap: wrap; }
+.att-strip { display: flex; gap: 8px; padding: 6px 22px 0; flex-wrap: wrap; }
+.composer .att-strip { flex-basis: 100%; padding: 0 0 4px; }
+.att { position: relative; width: 72px; height: 72px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--panel-2); }
+.att img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.att-x { position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .65); color: #fff; cursor: pointer; font-size: 11px; line-height: 1; padding: 0; }
+.msg-images { display: grid; gap: 4px; margin-top: 6px; max-width: 460px; }
+.msg-images.n2, .msg-images.n4 { grid-template-columns: 1fr 1fr; }
+.msg-images.n3 { grid-template-columns: 1fr 1fr 1fr; }
+.msg-img { padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel-2); cursor: zoom-in; display: grid; place-items: center; aspect-ratio: 1 / 1; }
+.msg-images.n1 .msg-img { aspect-ratio: 4 / 3; max-height: 340px; justify-self: start; max-width: 100%; }
+.msg-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.msg-images.n1 .msg-img img { object-fit: contain; }
+.msg-img-sk { width: 100%; height: 100%; }
+.lightbox { position: fixed; inset: 0; z-index: 80; background: rgba(0, 0, 0, .88); display: grid; place-items: center; }
+.lb-img { max-width: calc(100vw - 120px); max-height: calc(100vh - 80px); object-fit: contain; border-radius: 6px; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
+.lb-nav, .lb-close { position: absolute; border: 0; background: rgba(255, 255, 255, .1); color: #fff; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 18px; }
+.lb-nav:hover, .lb-close:hover { background: rgba(255, 255, 255, .22); }
+.lb-prev { left: 20px; top: 50%; transform: translateY(-50%); }
+.lb-next { right: 20px; top: 50%; transform: translateY(-50%); }
+.lb-close { top: calc(var(--tb-h, 34px) + 14px); right: 20px; width: 36px; height: 36px; font-size: 14px; }
+.lb-count { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); color: #ddd; font-size: 13px; }
+
+/* ---------- баг-репорты ---------- */
+.bugs-main { position: relative; }
+.bug-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.bug-form { margin: 22px; max-width: 760px; overflow-y: auto; }
+.bug-form textarea { width: 100%; resize: vertical; min-height: 140px; }
+.bug-form .field input { width: 100%; }
+.bug-att { padding: 0 0 8px; }
+.ticket-item { align-items: flex-start; }
+.ticket-no { flex: none; font: 600 12px Consolas, "Cascadia Mono", monospace; color: var(--muted); padding-top: 2px; min-width: 30px; }
+.ticket-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ticket-meta { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticket-meta.is-open { color: var(--accent); }
+.ticket-meta.is-visual, .ticket-meta.is-vuln { color: var(--ok); }
+.ticket-verdict { margin: 12px 22px 0; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); font-size: 13px; }
+.ticket-verdict.is-open { border-color: var(--accent-edge); background: var(--accent-soft); }
+.ticket-verdict.is-visual, .ticket-verdict.is-vuln { border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.ticket-note { margin-top: 6px; white-space: pre-wrap; color: var(--text); }
+.bug-log { padding-top: 6px; }
+.review-box .seg { margin-bottom: 4px; }
+.review-box textarea { width: 100%; resize: vertical; }
+.btn-img { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; }
+.btn-img svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.review-box .seg { grid-template-columns: repeat(4, auto); }
