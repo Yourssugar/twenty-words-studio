@@ -2,7 +2,7 @@
 // Интерфейс работает в песочнице и в сеть не ходит: все запросы к серверу
 // делает этот процесс, а интерфейс вызывает только функции из preload.js.
 
-const { app, BrowserWindow, ipcMain, session, shell, clipboard, Notification, Menu, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell, clipboard, Notification, Menu, safeStorage, dialog } = require('electron');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -197,7 +197,9 @@ function handle(channel, fn) {
     try {
       return { ok: true, data: await fn(arg || {}) };
     } catch (err) {
-      return { ok: false, error: err.code || err.message || 'error' };
+      const out = { ok: false, error: err.code || err.message || 'error' };
+      if (Number.isInteger(err.item)) out.item = err.item;
+      return out;
     }
   });
 }
@@ -217,6 +219,104 @@ function registerIpc() {
   handle('auth:logout', async () => {
     await client.logout();
     return true;
+  });
+
+  // Отчёты, скриншоты, напоминания, реферальные ссылки
+  const count = (v) => (Number.isSafeInteger(v) && v >= 0 ? v : 0);
+  const dayStr = (v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '');
+  const reportBody = (a) => ({
+    note: str(a.note, 300),
+    items: (Array.isArray(a.items) ? a.items : []).slice(0, 8).map((x) => ({
+      kind: x.kind === 'period' ? 'period' : 'pub',
+      platform: str(x.platform, 30),
+      format: ['long', 'short', 'post'].includes(x.format) ? x.format : '',
+      from: dayStr(x.from),
+      day: dayStr(x.day),
+      long: count(x.long),
+      short: count(x.short),
+      post: count(x.post),
+      views: count(x.views),
+      shot: int(x.shot),
+      label: str(x.label, 200),
+    })),
+  });
+  handle('team:stats', () => client.request('GET', '/api/team/stats'));
+  handle('reports:list', () => client.request('GET', '/api/reports'));
+  handle('reports:add', (a) => client.request('POST', '/api/reports', reportBody(a)));
+  handle('reports:edit', (a) => client.request('PUT', '/api/reports/' + need(a.id), reportBody(a)));
+  handle('reports:delete', (a) => client.request('DELETE', '/api/reports/' + need(a.id)));
+  handle('shots:upload', (a) => {
+    const image = typeof a.image === 'string' && a.image.length <= 4_300_000 && /^[A-Za-z0-9+/=]+$/.test(a.image) ? a.image : '';
+    if (!image) throw Object.assign(new Error('bad_image'), { code: 'bad_image' });
+    return client.request('POST', '/api/shots', { image }, { timeout: 60000 });
+  });
+  handle('shots:get', async (a) => {
+    const r = await client.fetchBytes('/api/shots/' + need(a.id));
+    if (r.type !== 'image/webp') throw Object.assign(new Error('bad_image'), { code: 'bad_image' });
+    return 'data:image/webp;base64,' + r.bytes.toString('base64');
+  });
+  handle('admin:reports', (a) => {
+    const q = new URLSearchParams();
+    if (['sent', 'ok', 'rejected', 'all'].includes(a.status)) q.set('status', a.status);
+    if (int(a.user)) q.set('user', String(int(a.user)));
+    if (/^\d{4}-\d{2}$/.test(a.month || '')) q.set('month', a.month);
+    return client.request('GET', '/api/admin/reports?' + q.toString());
+  });
+  handle('admin:reportReview', (a) =>
+    client.request('POST', '/api/admin/reports/' + need(a.id) + '/review', {
+      ok: a.ok === true,
+      note: str(a.note, 300),
+      items: (Array.isArray(a.items) ? a.items : []).slice(0, 8).map((x) => ({ id: int(x.id), views: count(x.views), long: count(x.long), short: count(x.short), post: count(x.post) })),
+    }),
+  );
+  handle('reminders:list', () => client.request('GET', '/api/reminders'));
+  handle('reminders:add', (a) => client.request('POST', '/api/reminders', { day: dayStr(a.day), note: str(a.note, 120), every: Math.min(90, count(a.every)) }));
+  handle('reminders:done', (a) => client.request('POST', '/api/reminders/' + need(a.id) + '/done'));
+  handle('reminders:delete', (a) => client.request('DELETE', '/api/reminders/' + need(a.id)));
+  handle('refs:mine', (a) => client.request('GET', '/api/refs' + (/^\d{4}-\d{2}$/.test(a.month || '') ? '?month=' + a.month : '')));
+  handle('refs:link', () => client.base); // адрес сервера для ссылок
+  handle('admin:refs', (a) => client.request('GET', '/api/admin/refs' + (/^\d{4}-\d{2}$/.test(a.month || '') ? '?month=' + a.month : '')));
+  handle('admin:refTarget', (a) => {
+    const body = { name: str(a.name, 40), slug: str(a.slug, 20), url: str(a.url, 300), active: a.active === true, pos: count(a.pos) };
+    return a.id ? client.request('PUT', '/api/admin/refs/targets/' + need(a.id), body) : client.request('POST', '/api/admin/refs/targets', body);
+  });
+  handle('admin:refTargetDelete', (a) => client.request('DELETE', '/api/admin/refs/targets/' + need(a.id)));
+  handle('admin:refOff', (a) => client.request('POST', '/api/admin/refs/off', { user: int(a.user), day: dayStr(a.day), off: a.off === true }));
+
+  // Учёт (только основатель, сервер проверяет сам)
+  const money = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  const day = (v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '');
+  const month = (v) => (typeof v === 'string' && /^\d{4}-\d{2}$/.test(v) ? v : '');
+  handle('acct:get', () => client.request('GET', '/api/admin/acct'));
+  handle('acct:weights', (a) => {
+    const w = {};
+    for (const [k, v] of Object.entries(a.weights || {})) w[str(k, 40)] = k === 'payStart' ? day(v) : k === 'testMonths' ? Math.trunc(money(v)) : money(v);
+    return client.request('PUT', '/api/admin/acct/weights', w);
+  });
+  handle('acct:addEvent', (a) =>
+    client.request('POST', '/api/admin/acct/events', { user: int(a.user), day: day(a.day), type: str(a.type, 20), qty: money(a.qty), points: money(a.points), amount: money(a.amount), note: str(a.note, 200) }));
+  handle('acct:deleteEvent', (a) => client.request('DELETE', '/api/admin/acct/events/' + need(a.id)));
+  handle('acct:addPayment', (a) =>
+    client.request('POST', '/api/admin/acct/payments', { user: int(a.user), day: day(a.day), amount: money(a.amount), purpose: str(a.purpose, 20), month: month(a.month), note: str(a.note, 200) }));
+  handle('acct:deletePayment', (a) => client.request('DELETE', '/api/admin/acct/payments/' + need(a.id)));
+  handle('acct:month', (a) => {
+    const body = { income: money(a.income), expenses: money(a.expenses), note: str(a.note, 200) };
+    if (typeof a.budgetAdd === 'number' && Number.isFinite(a.budgetAdd)) body.budgetAdd = a.budgetAdd;
+    return client.request('PUT', '/api/admin/acct/months/' + (month(a.month) || 'x'), body);
+  });
+  handle('acct:close', (a) => client.request(a.open ? 'DELETE' : 'POST', '/api/admin/acct/months/' + (month(a.month) || 'x') + '/close'));
+  handle('acct:member', (a) => client.request('PUT', '/api/admin/acct/members/' + need(a.id), { start: day(a.start), leftOn: day(a.leftOn) }));
+  handle('acct:export', async () => {
+    const r = await client.fetchBytes('/api/admin/acct/export.xlsx');
+    const res = await dialog.showSaveDialog(win, {
+      title: 'Сохранить учёт',
+      defaultPath: path.join(app.getPath('documents'), 'uchet-' + new Date().toISOString().slice(0, 10) + '.xlsx'),
+      filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+    });
+    if (res.canceled || !res.filePath) return '';
+    await fs.promises.writeFile(res.filePath, r.bytes);
+    shell.showItemInFolder(res.filePath);
+    return res.filePath;
   });
 
   // Правила команды
@@ -472,6 +572,21 @@ function registerIpc() {
   handle('app:info', () => ({ version: app.getVersion(), dev: DEV }));
   handle('app:restart', () => {
     if (updater) updater.restart();
+    return true;
+  });
+  handle('app:notify', (a) => {
+    // Напоминание из раздела "Вклад": системное уведомление, если окно не в фокусе.
+    if (win && win.isFocused()) return false;
+    if (win) win.flashFrame(true);
+    if (!Notification.isSupported()) return false;
+    const n = new Notification({ title: str(a.title, 80), body: str(a.body, 300), icon: ICON });
+    n.on('click', () => {
+      if (!win) return;
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+    });
+    n.show();
     return true;
   });
   handle('app:copy', (a) => {

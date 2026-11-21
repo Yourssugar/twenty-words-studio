@@ -58,8 +58,37 @@ if (existing && existing.assets && existing.assets.some((a) => a.name.endsWith('
   process.exit(1);
 }
 
+// Репозиторий публичный. Перед сохранением: файлы, которые попали в git раньше, а теперь
+// исключены в .gitignore (например, памятка), убираем из репозитория (на диске они остаются).
+// И проверяем, что в выпуск не уходит ничего похожего на ключи и пароли.
+function guardPublic() {
+  const tracked = git(['ls-files', '-ci', '--exclude-standard', '-z']).split('\0').filter(Boolean);
+  for (const f of tracked) {
+    git(['rm', '--cached', '-q', '--', f]);
+    console.log('Убрано из репозитория (осталось на диске): ' + f);
+  }
+  git(['add', '-A']);
+  const files = git(['diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z']).split('\0').filter(Boolean);
+  const bad = /\.(md|txt|env|pem|key)$/i;
+  const allowed = new Set(['README.md']);
+  const secret = /(sk-[A-Za-z0-9_-]{20,}|AGE-SECRET-KEY-1[0-9A-Z]{20,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/;
+  const problems = [];
+  for (const f of files) {
+    const full = path.join(ROOT, f);
+    if (!fs.existsSync(full)) continue;
+    if (bad.test(f) && !allowed.has(f)) problems.push(f + ': такие файлы в публичный репозиторий не кладём');
+    else if (fs.statSync(full).size < 2_000_000 && secret.test(fs.readFileSync(full, 'latin1'))) problems.push(f + ': похоже на ключ или пароль');
+  }
+  if (problems.length) {
+    git(['reset', '-q']);
+    console.error('Выпуск остановлен, в репозиторий ушло бы лишнее:\n  ' + problems.join('\n  ') + '\nУберите файл из папки или добавьте его в .gitignore и запустите снова.');
+    process.exit(1);
+  }
+}
+
 // Изменения в папке: сохраняем и отправляем на GitHub.
 try {
+  guardPublic();
   if (git(['status', '--porcelain'])) {
     git(['add', '-A']);
     git(['commit', '-m', `Twenty Words Studio ${version}`]);

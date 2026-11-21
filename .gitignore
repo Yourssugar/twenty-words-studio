@@ -3,4 +3,7 @@ dist/
 dist-tools/
 *.log
 .github-token*
-ПАМЯТКА.md
+# Памятка и любые заметки в публичный репозиторий не идут (кроме README)
+*.md
+!README.md
+pamyatka/

@@ -71,6 +71,7 @@ async function call(promise) {
   if (!res.ok) {
     const e = new Error(res.error);
     e.code = res.error;
+    if (Number.isInteger(res.item)) e.item = res.item;
     throw e;
   }
   return res.data;
@@ -119,6 +120,7 @@ const ICONS = {
   audio: '<svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg>',
   image: '<svg viewBox="0 0 24 24"><path d="M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6"/></svg>',
   forge: '<svg viewBox="0 0 24 24"><path d="M4 9h11l4 3H8v5H4zM8 17l-2 3M12 17l2 3"/></svg>',
+  chart: '<svg viewBox="0 0 24 24"><path d="M4 20h16M7 17v-5M12 17V7M17 17v-8"/></svg>',
   files: '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6"/></svg>',
   spark: '<svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg>',
 };
@@ -267,6 +269,8 @@ async function enterApp() {
 async function afterRules() {
   setView(S.view);
   setStatus(await call(studio.chat.connect()));
+  // Напоминание о скриншотах, когда уже известно, кто вошёл (основателю ещё очередь проверки).
+  setTimeout(() => typeof contribRemind === 'function' && contribRemind(), 2500);
 }
 
 function setView(view) {
@@ -282,6 +286,7 @@ function setView(view) {
   if (view === 'profile') renderProfile();
   if (view === 'assistant' && typeof openAssistant === 'function') openAssistant();
   if (view === 'projects' && typeof openProjects === 'function') openProjects();
+  if (view === 'contrib' && typeof openContrib === 'function') openContrib();
   if (view === 'chat') {
     markRead();
     $('composer-text').focus();
@@ -378,6 +383,9 @@ studio.chat.onEvent((ev) => {
 
     case 'rules':
       if (typeof checkRules === 'function') checkRules();
+      break;
+    case 'reports':
+      if (typeof onReportsEvent === 'function') onReportsEvent();
       break;
     case 'presence': {
       const u = S.users.get(ev.user);

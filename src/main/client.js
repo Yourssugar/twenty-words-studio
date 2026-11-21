@@ -103,9 +103,40 @@ class StudioClient extends EventEmitter {
       const code = (data && data.error) || 'http_' + res.status;
       if (res.status === 401 && auth) this.signOutLocal();
       if (res.status === 451) this.emit('rulesRequired');
-      throw new ServerError(code, res.status);
+      const err = new ServerError(code, res.status);
+      if (data && Number.isInteger(data.item)) err.item = data.item; // номер вложения отчёта с ошибкой
+      throw err;
     }
     return data;
+  }
+
+  /** GET картинки или другого файла: Buffer и тип. */
+  async fetchBytes(path, { timeout = 30000 } = {}) {
+    if (!this.base) throw new ServerError('bad_server_url');
+    if (!this.token) throw new ServerError('unauthorized', 401);
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeout);
+    let res;
+    try {
+      res = await this.fetch(this.base + path, { headers: { Authorization: 'Bearer ' + this.token }, signal: ctrl.signal, redirect: 'error' });
+      if (!res.ok) {
+        let data = null;
+        try {
+          data = await res.json();
+        } catch {
+          /* пусто */
+        }
+        if (res.status === 401) this.signOutLocal();
+        if (res.status === 451) this.emit('rulesRequired');
+        throw new ServerError((data && data.error) || 'http_' + res.status, res.status);
+      }
+      return { bytes: Buffer.from(await res.arrayBuffer()), type: res.headers.get('content-type') || '' };
+    } catch (err) {
+      if (err instanceof ServerError) throw err;
+      throw new ServerError(err.name === 'AbortError' ? 'timeout' : 'network');
+    } finally {
+      clearTimeout(t);
+    }
   }
 
   /** POST с ответом потоком NDJSON: каждая строка JSON уходит в onEvent. */

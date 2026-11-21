@@ -733,7 +733,7 @@ function setupGraph() {
     drawGraph();
   }).observe(PG.canvas.parentElement);
   PG.canvas.addEventListener('mousedown', onDown);
-  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mousemove', pgOnMove);
   window.addEventListener('mouseup', onUp);
   PG.canvas.addEventListener('dblclick', onDbl);
   PG.canvas.addEventListener('wheel', onWheel, { passive: false });
@@ -802,7 +802,7 @@ function onDown(e) {
   e.preventDefault();
 }
 
-function onMove(e) {
+function pgOnMove(e) {
   if (S.view !== 'projects' || !PG.canvas) return;
   const [sx, sy] = localPos(e);
   PG.mouse = [sx, sy];
