@@ -823,3 +823,92 @@ html.focus-mode .view-chat .side { display: none; }
 .btn-img { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; }
 .btn-img svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .review-box .seg { grid-template-columns: repeat(4, auto); }
+.tile-num { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.storage-table td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); }
+.storage-table td.num:last-child { color: var(--text); }
+
+/* ---------- материалы ---------- */
+.mat-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.mat-filters { padding: 12px 22px 0; }
+.mat-filters .seg { margin-bottom: 0; }
+.mat-zone { flex: 1; min-height: 0; overflow-y: auto; margin: 12px 22px; border: 1px dashed transparent; border-radius: 10px; }
+.mat-zone.drop-on { border-color: var(--accent); background: var(--accent-soft); }
+.mat-empty { padding: 50px 20px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; display: flex; flex-direction: column; gap: 6px; }
+.mat-folder { text-transform: uppercase; letter-spacing: .06em; margin: 14px 0 6px; }
+.mat-folder:first-child { margin-top: 0; }
+.mat-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 8px; }
+.mat-row:hover { background: var(--panel-2); }
+.mat-name { flex: 1; min-width: 0; }
+.mat-ico { width: 34px; height: 34px; flex: none; border-radius: 8px; display: grid; place-items: center; background: var(--panel-2); color: var(--accent); }
+.mat-ico svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.mat-ico.k-audio { color: #6fc3ff; }
+.mat-ico.k-image { color: #7bd88f; }
+.b-link { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; font: inherit; font-size: 12px; }
+.b-link:hover { color: var(--text); }
+.mat-bar { height: 5px; border-radius: 3px; background: var(--panel-2); overflow: hidden; margin: 6px 0; }
+.mat-bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+.mat-usage { margin-top: 14px; }
+.mat-queue { border-top: 1px solid var(--line); padding: 10px 22px 14px; max-height: 34%; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.mat-q .item-name { flex: 1; min-width: 0; }
+.mat-q.is-err .err-text { color: #ff8b84; }
+.mat-view { max-width: 100%; max-height: calc(100vh - 260px); display: block; margin: 0 auto; border-radius: 6px; background: #000; }
+.mat-audio { width: 100%; }
+.btn.is-on { border-color: var(--accent); color: var(--accent); }
+.toast-warn { border-color: var(--accent); }
+
+/* ---------- блоки фокуса на главной ---------- */
+html.focus-mode #home-canvas, html.focus-mode .home-head, html.focus-mode #home-drawer, html.focus-mode #home-tip { visibility: hidden; }
+.focus-hub {
+  position: absolute; inset: 0; display: grid; place-content: center;
+  grid-template-columns: repeat(2, clamp(200px, 24vw, 300px)); gap: 22px; padding: 40px;
+}
+.focus-hub[hidden] { display: none; }
+.hub-tile {
+  aspect-ratio: 16 / 10; border-radius: 40px; border: 1px solid var(--accent-edge);
+  background: color-mix(in srgb, var(--panel) 72%, transparent);
+  backdrop-filter: blur(10px); color: var(--text); cursor: pointer; touch-action: none; user-select: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+.hub-tile:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-edge), 0 12px 36px rgba(0, 0, 0, .45), 0 0 34px color-mix(in srgb, var(--accent) 30%, transparent); background: color-mix(in srgb, var(--panel) 82%, transparent); }
+.hub-tile.is-drag { z-index: 3; cursor: grabbing; border-color: var(--accent); box-shadow: 0 20px 50px rgba(0, 0, 0, .55), 0 0 40px color-mix(in srgb, var(--accent) 35%, transparent); }
+.hub-ico { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.hub-ico svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.hub-title { font-size: 17px; font-weight: 600; }
+.hub-sub { font-size: 12px; color: var(--muted); }
+
+/* ---------- перерыв в фокусе ---------- */
+.rest { position: fixed; inset: var(--tb-h) 0 0 0; z-index: 70; display: grid; place-items: center; background: rgba(4, 5, 8, .82); backdrop-filter: blur(8px); animation: rest-in .45s ease both; }
+.rest.is-out { animation: rest-out .4s ease both; }
+@keyframes rest-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rest-out { from { opacity: 1; } to { opacity: 0; } }
+.rest-box { display: flex; flex-direction: column; align-items: center; gap: 18px; animation: rest-pop .6s cubic-bezier(.2,.9,.25,1.1) both; }
+@keyframes rest-pop { from { transform: scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+.rest-dial { position: relative; width: min(52vh, 360px); aspect-ratio: 1; }
+.rest-clock { width: 100%; height: 100%; display: block; }
+.rc-face { fill: color-mix(in srgb, var(--panel) 70%, transparent); stroke: var(--line); stroke-width: 1.5; }
+.rc-tick { stroke: var(--muted); stroke-width: 1.2; opacity: .5; }
+.rc-tick.long { stroke: var(--text); stroke-width: 2.4; opacity: .8; }
+.rc-track { fill: none; stroke: var(--panel-2); stroke-width: 10; }
+.rc-ring { fill: none; stroke: var(--ok); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset 1s linear; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--ok) 60%, transparent)); }
+.rc-hand { stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; transition: transform .25s cubic-bezier(.3,1.6,.6,1); }
+.rc-pin { fill: var(--accent); }
+.rest-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; padding-top: 70px; }
+.rest-label { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--ok); }
+.rest-time { font-size: clamp(34px, 7vh, 54px); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+.rest-hint { margin: 0; color: var(--muted); }
+
+/* ---------- кнопка фокуса у ленты, "Главная" в фокусе ---------- */
+.feed.is-narrow { width: auto; bottom: auto; background: none; border: 0; backdrop-filter: none; }
+.feed-tabs { display: flex; gap: 8px; align-items: center; }
+.feed-head { gap: 8px; }
+.feed-head > span:first-child { flex: 1; }
+.feed-focus { border: 1px solid var(--accent-edge); background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 12px; letter-spacing: 0; text-transform: none; font-weight: 600; }
+.feed-tabs .feed-focus { padding: 6px 14px; background: color-mix(in srgb, var(--panel) 85%, transparent); }
+.feed-focus:hover { background: var(--accent); color: var(--accent-ink); }
+html.focus-mode.focus-away .rail { display: flex; }
+html.focus-away .rail-btn:not([data-view="home"]), html.focus-away .rail-me { display: none; }
+html.focus-away .rail-btn[data-view="home"] { color: var(--accent-ink); background: var(--accent); animation: home-glow 2.4s ease-in-out infinite; }
+html.focus-away .rail-btn[data-view="home"]::before { display: none; }
+@keyframes home-glow { 0%, 100% { box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent); } 50% { box-shadow: 0 0 26px color-mix(in srgb, var(--accent) 80%, transparent); } }

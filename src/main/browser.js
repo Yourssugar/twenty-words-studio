@@ -57,8 +57,13 @@ function toUrl(text) {
 }
 
 class Browser {
-  constructor({ icon, onAudio, themeOf }) {
+  constructor({ icon, onAudio, themeOf, studio }) {
     this.icon = icon;
+    // Большие плитки студии на стартовой странице (data/config.json, browser.studio): только https.
+    this.studio = (Array.isArray(studio) ? studio : [])
+      .filter((x) => x && typeof x.url === 'string' && /^https:\/\//i.test(x.url) && isWeb(x.url))
+      .slice(0, 4)
+      .map((x) => ({ name: clip(x.name, 40) || hostOf(x.url), sub: clip(x.sub, 60), url: clip(x.url, 2000) }));
     this.onAudio = onAudio || (() => {});
     this.themeOf = themeOf || (() => ({ theme: 'auto', extra: [] }));
     this.file = path.join(app.getPath('userData'), 'browser.json');
@@ -584,6 +589,7 @@ class Browser {
       zoom: wc ? Math.round(wc.getZoomFactor() * 100) : 100,
       marked: !!(a && !a.start && this.data.marks.some((m) => m.url === a.url)),
       marks: this.data.marks.map((m) => ({ ...m, host: hostOf(m.url), icon: icons[hostOf(m.url)] || null })),
+      studio: this.studio.map((x, i) => ({ id: i, name: x.name, sub: x.sub, host: hostOf(x.url), icon: icons[hostOf(x.url)] || null })),
       missingDefaults: DEFAULT_MARKS.some((d) => !this.data.marks.some((m) => m.id === d.id || m.url === d.url)),
     };
   }
@@ -676,6 +682,13 @@ class Browser {
           this.state();
           this.saveSoon();
         }
+        break;
+      }
+      case 'openStudio': {
+        const x = this.studio[a.id | 0];
+        if (!x) break;
+        if (a.newTab || !t) this.newTab(x.url, { activate: !a.background });
+        else this.navigate(t, x.url);
         break;
       }
       case 'openMark': {

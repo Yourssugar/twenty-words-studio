@@ -230,14 +230,15 @@ function renderProjectHead() {
   const net = h('input', { type: 'checkbox' });
   net.checked = !!p.net;
   net.addEventListener('change', () => setNet(net));
-  tools.append(
+  // append() печатает null как текст: пустые кнопки отсекаем.
+  tools.append(...[
     h('button', { class: 'btn btn-s', type: 'button', text: 'Новый файл', onclick: () => newFile() }),
     runBtn,
     h('label', { class: 'check proj-net', title: 'Разрешить запущенному проекту ходить в интернет (CDN, внешние API). Сервер студии закрыт всегда.' }, net, 'Сеть'),
     h('button', { class: 'btn btn-s', type: 'button', text: 'В тему', title: 'Отправить снимок проекта в обсуждение', onclick: () => shareProject() }),
     p.kind !== 'drafts' ? h('button', { class: 'btn btn-s', type: 'button', text: 'Переименовать', onclick: renameProject }) : null,
     p.kind !== 'drafts' ? h('button', { class: 'btn btn-s btn-danger-ghost', type: 'button', text: 'Удалить', onclick: deleteProject }) : null,
-  );
+  ].filter(Boolean));
 }
 
 // ---------- редактор файла ----------

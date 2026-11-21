@@ -59,7 +59,7 @@ applyTheme = function (id) {
   return t;
 };
 
-const SECTION_NAMES = { home: 'Главная', chat: 'Чат', projects: 'Проекты', assistant: 'Ассистент', contrib: 'Вклад', bugs: 'Баг-репорты', tools: 'Инструменты', admin: 'Админ', profile: 'Профиль' };
+const SECTION_NAMES = { home: 'Главная', chat: 'Чат', projects: 'Проекты', assistant: 'Ассистент', contrib: 'Вклад', bugs: 'Баг-репорты', materials: 'Материалы', tools: 'Инструменты', admin: 'Админ', profile: 'Профиль' };
 function setTitleSection(view) {
   const el = $('tb-section');
   if (el) el.textContent = SECTION_NAMES[view] || '';

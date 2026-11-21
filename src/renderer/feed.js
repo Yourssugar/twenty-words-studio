@@ -82,16 +82,20 @@ function renderFeed() {
   FD.visible = vis;
   box.classList.toggle('is-collapsed', !feedOpenSetting());
   box.hidden = S.view !== 'home' || !!B.open || !!B.topic;
+  box.classList.toggle('is-narrow', false);
   if (!feedOpenSetting()) {
-    box.append(h('button', { class: 'feed-tab', type: 'button', text: 'Лента команды', onclick: () => setFeedOpen(true) }));
+    box.append(h('div', { class: 'feed-tabs' }, h('button', { class: 'feed-tab', type: 'button', text: 'Лента команды', onclick: () => setFeedOpen(true) }), focusEntry()));
     return;
   }
   if (!vis) {
-    box.hidden = true;
+    // Окно узкое для ленты: остаётся только кнопка фокуса.
+    box.classList.add('is-narrow');
+    box.append(h('div', { class: 'feed-tabs' }, focusEntry()));
     return;
   }
   box.append(h('header', { class: 'feed-head' },
     h('span', { text: 'Лента команды' }),
+    focusEntry(),
     h('button', { class: 'feed-x', type: 'button', title: 'Свернуть ленту', text: 'скрыть', onclick: () => setFeedOpen(false) }),
   ));
   const list = h('div', { class: 'feed-list' });

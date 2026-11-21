@@ -1,5 +1,6 @@
 'use strict';
-// Музыка в фоне: студийные треки из папки на GitHub, своя папка с музыкой или онлайн-радио.
+// Музыка в фоне: студийные треки (из материалов студии в R2, а пока проект музыки
+// не выбран, из папки на GitHub), своя папка с музыкой или онлайн-радио.
 // Интерфейс играет их через адреса twmusic://, сам в сеть и к файлам не ходит.
 //
 //   twmusic://studio/<sha>   студийный трек: с диска, если уже скачан, иначе с GitHub
@@ -30,7 +31,8 @@ const typeOf = (name) => TYPES[path.extname(name).toLowerCase()] || 'audio/mpeg'
 const titleOf = (name) => path.basename(name, path.extname(name)).replace(/(?<!\d)_+|_+(?!\d)/g, ' ').replace(/\s+/g, ' ').trim();
 
 class Music {
-  constructor({ config, settings }) {
+  constructor({ config, settings, server }) {
+    this.server = server || null; // { list(), url(id) }: музыка студии из материалов
     const m = (config && config.music) || {};
     this.repo = /^[\w.-]+\/[\w.-]+$/.test(m.repo || '') ? m.repo : 'Yourssugar/twenty-words-studio';
     this.path = typeof m.path === 'string' && !m.path.includes('..') ? m.path.replace(/^\/+|\/+$/g, '') : 'music';
@@ -53,9 +55,30 @@ class Music {
     }
   }
 
+  // Музыка студии из материалов (R2). null: проект музыки не выбран или сервер недоступен.
+  async serverList() {
+    if (!this.server) return null;
+    try {
+      const r = await this.server.list();
+      if (!r || !r.project) return null;
+      return (r.tracks || [])
+        .filter((t) => Number.isSafeInteger(t.id) && AUDIO.test(t.name || ''))
+        .map((t) => ({ id: 'r' + t.id, fileId: t.id, name: t.name, title: titleOf(t.name), size: t.bytes }));
+    } catch {
+      return null;
+    }
+  }
+
   async studioList(force = false) {
     if (!this.studio) this.studio = this.readList();
     if (this.studio && !force && Date.now() - this.studio.at < LIST_TTL) return this.studio.items;
+    const fromServer = await this.serverList();
+    if (fromServer) {
+      this.studio = { at: Date.now(), items: fromServer };
+      fs.mkdirSync(this.dir, { recursive: true });
+      fs.writeFileSync(this.listFile, JSON.stringify(this.studio));
+      return fromServer;
+    }
     const enc = this.path.split('/').map(encodeURIComponent).join('/');
     const url = `https://api.github.com/repos/${this.repo}/contents/${enc}` + (this.branch ? '?ref=' + encodeURIComponent(this.branch) : '');
     try {
@@ -122,7 +145,15 @@ class Music {
       fs.utimes(file, now, now, () => {}); // недавно игравшие из кеша не удаляются
       return this.serveFile(file, req);
     }
-    const res = await net.fetch(item.url);
+    let src = item.url;
+    if (item.fileId) {
+      try {
+        src = (await this.server.url(item.fileId)).url;
+      } catch {
+        return new Response('upstream', { status: 502 });
+      }
+    }
+    const res = await net.fetch(src);
     if (!res.ok || !res.body) return new Response('upstream', { status: 502 });
     // Играем сразу и параллельно сохраняем на диск.
     const [play, save] = res.body.tee();
@@ -220,7 +251,7 @@ class Music {
       try {
         const u = new URL(req.url);
         const id = decodeURIComponent(u.pathname.replace(/^\//, ''));
-        if (u.hostname === 'studio' && /^[0-9a-f]{40}$/.test(id)) return await this.serveStudio(id, req);
+        if (u.hostname === 'studio' && /^([0-9a-f]{40}|r\d{1,15})$/.test(id)) return await this.serveStudio(id, req);
         if (u.hostname === 'folder' && /^\d+$/.test(id)) return await this.serveFolder(id, req);
         if (u.hostname === 'radio' && /^\d+$/.test(id)) return await this.serveRadio(id);
         return new Response('not found', { status: 404 });
@@ -233,7 +264,7 @@ class Music {
   async studioInfo(force) {
     const items = await this.studioList(force);
     const cached = this.cachedIds();
-    return { repo: this.repo, path: this.path, tracks: items.map((x) => ({ id: x.id, title: x.title, cached: cached.has(x.id) })) };
+    return { repo: this.repo, path: this.path, r2: items.some((x) => x.fileId), tracks: items.map((x) => ({ id: x.id, title: x.title, cached: cached.has(x.id) })) };
   }
 }
 

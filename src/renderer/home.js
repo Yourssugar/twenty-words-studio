@@ -278,7 +278,7 @@ function frame(now) {
 
   ctx.setTransform(G.dpr, 0, 0, G.dpr, 0, 0);
   ctx.clearRect(0, 0, G.w, G.h);
-  if (!B.branches.length) return;
+  if (!B.branches.length || document.documentElement.classList.contains('focus-mode')) return; // в фокусе вместо графа блоки
   const L = layout();
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#e9a23b';
 

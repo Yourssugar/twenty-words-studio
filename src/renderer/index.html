@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; media-src twmusic:; form-action 'none'; base-uri 'none'">
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://*.r2.cloudflarestorage.com; font-src 'self'; connect-src 'none'; media-src twmusic: https://*.r2.cloudflarestorage.com; form-action 'none'; base-uri 'none'">
   <title>Twenty Words Studio</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -15,8 +15,7 @@
     <span class="tb-title">Twenty Words Studio</span>
     <span class="tb-section" id="tb-section"></span>
     <button class="tb-btn" id="tb-today" type="button" title="Экран Сегодня" hidden>Сегодня</button>
-    <button class="tb-btn" id="tb-focus" type="button" title="Режим фокуса" hidden>Фокус</button>
-    <button class="tb-btn" id="tb-browser" type="button" title="Встроенный браузер: TikTok, YouTube, Instagram и ваши закладки" hidden>Браузер</button>
+    <button class="tb-btn" id="tb-focus" type="button" title="Режим фокуса: сколько осталось, закончить" hidden>Фокус</button>
     <div class="tb-fill"></div>
     <div class="player" id="player">
       <button class="pl-btn" id="pl-play" type="button" title="Играть"></button>
@@ -82,7 +81,9 @@
       <button class="rail-btn" data-view="projects" title="Проекты"><span class="ico" data-ico="files"></span><span>Проекты</span></button>
       <button class="rail-btn" data-view="assistant" title="Ассистент"><span class="ico" data-ico="spark"></span><span>Ассистент</span></button>
       <button class="rail-btn" data-view="contrib" title="Вклад: публикации и скриншоты"><span class="ico" data-ico="chart"></span><span>Вклад</span><i class="rail-badge" id="badge-contrib" hidden></i></button>
+      <button class="rail-btn" data-view="materials" title="Материалы: видео, музыка, фото по проектам"><span class="ico" data-ico="box"></span><span>Материалы</span></button>
       <button class="rail-btn" data-view="bugs" title="Баг-репорты: нашли ошибку, опишите и приложите скриншоты"><span class="ico" data-ico="bug"></span><span>Баги</span><i class="rail-badge" id="badge-bugs" hidden></i></button>
+      <button class="rail-btn rail-act" id="rail-browser" type="button" title="Встроенный браузер: сайт и канал студии, TikTok, YouTube, закладки"><span class="ico" data-ico="globe"></span><span>Браузер</span></button>
       <button class="rail-btn" data-view="tools" title="Инструменты"><span class="ico" data-ico="tools"></span><span>Инструменты</span></button>
       <button class="rail-btn" data-view="admin" title="Админ" id="rail-admin" hidden><span class="ico" data-ico="shield"></span><span>Админ</span></button>
       <div class="rail-spacer"></div>
@@ -139,6 +140,29 @@
         </div>
         <div id="contrib-body"></div>
       </div>
+    </div>
+
+    <!-- Материалы -->
+    <div class="view view-mat" data-view-pane="materials" hidden>
+      <aside class="side">
+        <div class="side-head">
+          <div class="side-title">Материалы</div>
+          <div class="muted small">видео, музыка, фото по проектам</div>
+        </div>
+        <div class="side-pad"><button class="btn btn-accent btn-wide" type="button" id="mat-new" hidden>Новый проект</button></div>
+        <div id="mat-list"></div>
+        <div class="side-pad mat-usage" id="mat-usage"></div>
+      </aside>
+      <main class="chat mat-main">
+        <header class="chat-head row between">
+          <div class="grow">
+            <div class="chat-title" id="mat-title"></div>
+            <div class="chat-sub" id="mat-sub"></div>
+          </div>
+          <div class="row gap-s wrap end" id="mat-tools"></div>
+        </header>
+        <div class="mat-body" id="mat-body"></div>
+      </main>
     </div>
 
     <!-- Баг-репорты -->
@@ -252,6 +276,11 @@
     <div class="view view-admin" data-view-pane="admin" hidden>
       <div class="page">
         <h1>Админ</h1>
+
+        <div class="card" id="storage-card" hidden>
+          <div class="row between"><h2>Место на сервере</h2><button class="btn btn-s" type="button" id="storage-refresh">Обновить</button></div>
+          <div id="storage-body"></div>
+        </div>
 
         <div class="card">
           <h2>Пригласить человека</h2>
@@ -424,5 +453,6 @@
   <script src="celebrate.js"></script>
   <script src="focus.js"></script>
   <script src="bugs.js"></script>
+  <script src="materials.js"></script>
 </body>
 </html>

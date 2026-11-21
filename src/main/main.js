@@ -13,6 +13,7 @@ const { Runner, schemePrivileges } = require('./runner');
 const { setupUpdater } = require('./updater');
 const { Music, musicPrivileges } = require('./music');
 const { Browser } = require('./browser');
+const { Materials } = require('./materials');
 
 const ROOT = path.join(__dirname, '..', '..');
 const RENDERER = path.join(__dirname, '..', 'renderer', 'index.html');
@@ -26,6 +27,8 @@ let updater = null;
 let runner = null;
 let music = null;
 let browser = null;
+let materials = null;
+const MIN_SERVER = '0.9.0'; // сервер, который нужен этой версии приложения
 const names = new Map(); // id -> имя, для текста уведомлений
 const aiStreams = new Map(); // чат ассистента -> AbortController текущего ответа
 let myId = 0;
@@ -85,6 +88,7 @@ const LOOK = {
   todayScreen: [isBool, true], // экран "Сегодня" при первом входе за день
   feedOpen: [isBool, true], // лента команды на главной развёрнута
   celebrate: [isBool, true], // короткий праздник при успехах
+  focusOrder: [(x) => Array.isArray(x) && x.length <= 8 && x.every((v) => typeof v === 'string' && /^[a-z]{1,20}$/.test(v)), []], // порядок блоков фокуса
   celebrated: [(x) => !!x && typeof x === 'object' && !Array.isArray(x) && JSON.stringify(x).length < 2000, {}], // что уже праздновали
   todayShown: [(x) => typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x), ''],
   motion: [oneOf('auto', 'all', 'soft', 'off'), 'auto'], // анимации; auto: по настройке Windows
@@ -538,6 +542,51 @@ function registerIpc() {
   handle('subrooms:rename', (a) => client.request('PATCH', '/api/subrooms/' + need(a.id), { title: str(a.title, 80) }));
   handle('subrooms:delete', (a) => client.request('DELETE', '/api/subrooms/' + need(a.id)));
   handle('tickets:list', () => client.request('GET', '/api/tickets'));
+  handle('admin:storage', () => client.request('GET', '/api/admin/storage'));
+
+  // Версия сервера: старый сервер не знает новых разделов, об этом лучше сказать сразу.
+  handle('app:server', async () => {
+    let v = '';
+    try {
+      v = String((await client.request('GET', '/api/health', undefined, { auth: false })).version || '');
+    } catch {
+      return { version: '', need: MIN_SERVER, old: false, unknown: true };
+    }
+    const n = (x) => x.split('.').map((p) => parseInt(p, 10) || 0);
+    const [a, b] = [n(v || '0'), n(MIN_SERVER)];
+    const old = a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+    return { version: v, need: MIN_SERVER, old: old < 0 };
+  });
+
+  // Материалы студии (файлы в R2)
+  const matText = (v, n) => str(v, n);
+  handle('mat:overview', () => client.request('GET', '/api/materials'));
+  handle('mat:files', (a) => client.request('GET', '/api/materials/projects/' + need(a.project) + '/files'));
+  handle('mat:projectAdd', (a) => client.request('POST', '/api/materials/projects', { title: matText(a.title, 120), note: matText(a.note, 600) }));
+  handle('mat:projectEdit', (a) => client.request('PATCH', '/api/materials/projects/' + need(a.id), { title: matText(a.title, 120), note: matText(a.note, 600) }));
+  handle('mat:projectDelete', (a) => client.request('DELETE', '/api/materials/projects/' + need(a.id), undefined, { timeout: 120000 }));
+  handle('mat:settings', (a) => {
+    const body = {};
+    if (Number.isFinite(a.limitGB)) body.limitGB = a.limitGB;
+    if (Number.isFinite(a.maxFileGB)) body.maxFileGB = a.maxFileGB;
+    if (Number.isSafeInteger(a.musicProject) && a.musicProject >= 0) body.musicProject = a.musicProject;
+    return client.request('PATCH', '/api/materials/settings', body);
+  });
+  handle('mat:pick', () => materials.pick());
+  handle('mat:register', (a) => materials.register(str(a.path, 4000)));
+  handle('mat:upload', (a) => materials.upload({ token: str(a.token, 40), project: need(a.project), folder: matText(a.folder, 80) }));
+  handle('mat:cancel', (a) => materials.cancel(str(a.token, 40)));
+  handle('mat:download', (a) => materials.download(need(a.id)));
+  handle('mat:downloadProject', (a) => materials.downloadProject(need(a.project)));
+  handle('mat:preview', (a) => materials.previewUrl(need(a.id)));
+  handle('mat:showFile', (a) => materials.showFile(a.file));
+  handle('mat:fileEdit', (a) => {
+    const body = {};
+    if (typeof a.name === 'string') body.name = str(a.name, 200);
+    if (typeof a.folder === 'string') body.folder = str(a.folder, 80);
+    return client.request('PATCH', '/api/materials/files/' + need(a.id), body);
+  });
+  handle('mat:fileDelete', (a) => client.request('DELETE', '/api/materials/files/' + need(a.id)));
   handle('tickets:add', (a) =>
     client.request('POST', '/api/tickets', {
       title: str(a.title, 200),
@@ -901,11 +950,20 @@ if (!app.requestSingleInstanceLock()) {
         }
       },
     });
-    music = new Music({ config, settings: getSettings });
+    music = new Music({
+      config,
+      settings: getSettings,
+      server: {
+        list: () => client.request('GET', '/api/materials/music'),
+        url: (id) => client.request('GET', '/api/materials/files/' + int(id) + '/url?inline=1'),
+      },
+    });
+    materials = new Materials({ client, notify: send, window: () => win });
     browser = new Browser({
       icon: ICON,
       themeOf: () => ({ theme: getSettings().theme, extra: EXTRA_THEMES }),
       onAudio: (on) => send('browser:audio', { on }),
+      studio: config.browser && config.browser.studio,
     });
     music.setupProtocol();
     registerIpc();

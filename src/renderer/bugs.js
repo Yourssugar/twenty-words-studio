@@ -11,7 +11,7 @@ const BG = {
   list: null, // тикеты с сервера
   open: 0, // открытый тикет; 0: список или форма
   form: false, // форма нового тикета
-  filter: 'open', // у основателя: open | all
+  filter: 'open', // open | closed
   msgs: new Map(), // id тикета -> Map(id сообщения -> сообщение)
   more: new Map(),
   draft: { title: '', body: '' },
@@ -27,6 +27,7 @@ const VERDICTS = {
 };
 
 const ticketNo = (id) => '#' + id;
+const isFix = (t) => t.verdict === 'visual' || t.verdict === 'vuln';
 
 async function loadTickets() {
   const r = await call(studio.tickets.list());
@@ -79,14 +80,16 @@ function renderBugList() {
   const founder = S.me && S.me.founder;
   const f = $('bugs-filter');
   f.innerHTML = '';
-  if (founder) f.append(segOf([['open', 'Открытые'], ['all', 'Все']], BG.filter, (v) => {
+  const nOpen = (BG.list || []).filter((t) => t.status === 'open').length;
+  const nClosed = (BG.list || []).length - nOpen;
+  f.append(segOf([['open', 'Открытые ' + nOpen], ['closed', 'Закрытые ' + nClosed]], BG.filter, (v) => {
     BG.filter = v;
     renderBugList();
   }));
   const box = $('bugs-list');
   box.innerHTML = '';
-  const list = (BG.list || []).filter((t) => !founder || BG.filter === 'all' || t.status === 'open');
-  if (!list.length) box.append(h('div', { class: 'side-empty', text: founder && BG.filter === 'open' ? 'Открытых тикетов нет.' : 'Тикетов пока нет.' }));
+  const list = (BG.list || []).filter((t) => (BG.filter === 'open') === (t.status === 'open'));
+  if (!list.length) box.append(h('div', { class: 'side-empty', text: BG.filter === 'open' ? 'Открытых тикетов нет.' : 'Закрытых тикетов пока нет.' }));
   for (const t of list) {
     const u = S.users.get(t.user);
     box.append(h('button', { class: 'item ticket-item' + (t.id === BG.open && !BG.form ? ' is-on' : ''), onclick: () => showTicket(t.id) },
@@ -238,6 +241,8 @@ function renderTicket() {
     : h('div', { class: 'ticket-verdict is-' + t.verdict },
       h('b', { text: statusLine(t) + '.' }),
       t.inAcct ? h('span', { class: 'muted', text: ' Записано в учёт.' }) : null,
+      isFix(t) ? h('span', { class: 'muted', text: ' Скриншоты сохранены в истории исправлений.' }) : null,
+      t.verdict === 'notbug' || t.verdict === 'dup' ? h('span', { class: 'muted', text: ' Скриншоты уберутся с сервера через 7 дней после решения.' }) : null,
       t.note ? h('div', { class: 'ticket-note', text: t.note }) : null);
 
   const log = h('div', { class: 'log bug-log', id: 'bug-log' });
@@ -313,6 +318,7 @@ function ticketMessage(m, compact) {
   if (m.text) body.append(h('div', { class: 'msg-text' }, linkify(m.text), m.edited ? h('span', { class: 'edited', text: ' (изменено)' }) : null));
   const imgs = msgImages(m);
   if (imgs) body.append(imgs);
+  if (!m.text && !imgs) body.append(h('div', { class: 'muted small', text: 'Скриншоты убраны с сервера после решения.' }));
   row.append(body);
   if (mine || S.me.role === 'admin') row.append(h('div', { class: 'msg-actions' }, h('button', { class: 'mini', text: 'удалить', onclick: () => deleteMessage(m) })));
   return row;

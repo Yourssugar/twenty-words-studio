@@ -156,6 +156,29 @@ function renderBar() {
 
 // ---------- закладки ----------
 
+// Большие плитки студии: сайт и канал. Не удаляются, задаются в data/config.json.
+function renderStudio() {
+  const box = $('b-studio');
+  box.innerHTML = '';
+  for (const x of B.state.studio || []) {
+    const ico = h('span', { class: 'b-studio-ico' });
+    ico.append(x.icon ? h('img', { src: x.icon, alt: '' }) : letter(x.name, 'b-big-letter'));
+    box.append(h('div', {
+      class: 'b-studio-card',
+      title: x.host,
+      tabindex: '0',
+      onclick: (e) => cmd({ cmd: 'openStudio', id: x.id, newTab: e.ctrlKey || e.metaKey, background: e.ctrlKey || e.metaKey }),
+      onauxclick: (e) => {
+        if (e.button === 1) cmd({ cmd: 'openStudio', id: x.id, newTab: true, background: true });
+      },
+      onkeydown: (e) => {
+        if (e.key === 'Enter') cmd({ cmd: 'openStudio', id: x.id });
+      },
+    }, ico, h('span', { class: 'b-studio-text' }, h('span', { class: 'b-studio-name', text: x.name }), h('span', { class: 'b-mark-host', text: x.sub || x.host }))));
+  }
+  box.hidden = !box.children.length;
+}
+
 function renderMarks() {
   const s = B.state;
   const box = $('b-marks');
@@ -255,6 +278,7 @@ function render(s) {
   B.state = s;
   renderTabs();
   renderBar();
+  renderStudio();
   renderMarks();
 }
 

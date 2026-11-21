@@ -1,7 +1,7 @@
 // Мост между интерфейсом и главным процессом.
 // Интерфейс видит только эти функции: ни Node, ни сети, ни файлов.
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const call = (channel, arg) => ipcRenderer.invoke(channel, arg);
 const on = (channel) => (cb) => {
@@ -154,6 +154,7 @@ contextBridge.exposeInMainWorld('studio', {
     notify: (title, body) => call('app:notify', { title, body }),
     gpu: () => call('app:gpu'),
     avatars: () => call('app:avatars'),
+    server: () => call('app:server'),
     themes: () => call('app:themes'),
     relaunch: () => call('app:relaunch'),
     restart: () => call('app:restart'),
@@ -171,10 +172,34 @@ contextBridge.exposeInMainWorld('studio', {
   },
   tickets: {
     list: () => call('tickets:list'),
+    storage: () => call('admin:storage'),
     add: (t) => call('tickets:add', t),
     rename: (id, title) => call('tickets:rename', { id, title }),
     review: (id, r) => call('tickets:review', { id, ...r }),
     remove: (id) => call('tickets:delete', { id }),
+  },
+  materials: {
+    overview: () => call('mat:overview'),
+    files: (project) => call('mat:files', { project }),
+    projectAdd: (title, note) => call('mat:projectAdd', { title, note }),
+    projectEdit: (id, title, note) => call('mat:projectEdit', { id, title, note }),
+    projectDelete: (id) => call('mat:projectDelete', { id }),
+    settings: (s) => call('mat:settings', s),
+    pick: () => call('mat:pick'),
+    // Перетащенный из проводника файл: путь узнаёт только этот мост, интерфейс получает метку.
+    drop: (file) => {
+      const p = webUtils.getPathForFile(file);
+      return p ? call('mat:register', { path: p }) : Promise.resolve({ ok: false, error: 'bad_file' });
+    },
+    upload: (token, project, folder) => call('mat:upload', { token, project, folder }),
+    cancel: (token) => call('mat:cancel', { token }),
+    download: (id) => call('mat:download', { id }),
+    downloadProject: (project) => call('mat:downloadProject', { project }),
+    preview: (id) => call('mat:preview', { id }),
+    showFile: (file) => call('mat:showFile', { file }),
+    edit: (id, patch) => call('mat:fileEdit', { id, ...patch }),
+    remove: (id) => call('mat:fileDelete', { id }),
+    onProgress: on('mat:progress'),
   },
   browser: {
     open: (url) => call('browser:open', { url }),

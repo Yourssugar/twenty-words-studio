@@ -7,6 +7,17 @@ const $ = (id) => document.getElementById(id);
 
 // ---------- помощники ----------
 
+// append(x, null) печатает слово "null". Пустые части (null, undefined, false) пропускаем
+// во всём интерфейсе: так удобнее писать условия прямо в списке.
+for (const proto of [Element.prototype, DocumentFragment.prototype]) {
+  for (const k of ['append', 'prepend']) {
+    const orig = proto[k];
+    proto[k] = function (...items) {
+      return orig.apply(this, items.filter((x) => x !== null && x !== undefined && x !== false));
+    };
+  }
+}
+
 function h(tag, props, ...children) {
   const el = document.createElement(tag);
   if (props) {
@@ -129,6 +140,8 @@ const ICONS = {
   forge: '<svg viewBox="0 0 24 24"><path d="M4 9h11l4 3H8v5H4zM8 17l-2 3M12 17l2 3"/></svg>',
   chart: '<svg viewBox="0 0 24 24"><path d="M4 20h16M7 17v-5M12 17V7M17 17v-8"/></svg>',
   files: '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6"/></svg>',
+  globe: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>',
+  box: '<svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10"/></svg>',
   bug: '<svg viewBox="0 0 24 24"><path d="M8 8a4 4 0 0 1 8 0M7 9h10v5a5 5 0 0 1-10 0zM12 9v10M3 12h4M17 12h4M4 7l3 2M20 7l-3 2M4 18l3-2M20 18l-3-2"/></svg>',
   spark: '<svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg>',
 };
@@ -234,7 +247,6 @@ async function showAuth() {
   $('app').hidden = true;
   $('tb-today').hidden = true;
   $('tb-focus').hidden = true;
-  $('tb-browser').hidden = true;
   if (typeof FO !== 'undefined' && FO.on) stopFocus();
   if (typeof closeToday === 'function') closeToday();
   $('auth').hidden = false;
@@ -295,15 +307,15 @@ async function afterRules() {
   // Напоминание о скриншотах, когда уже известно, кто вошёл (основателю ещё очередь проверки).
   setTimeout(() => typeof contribRemind === 'function' && contribRemind(), 2500);
   $('tb-today').hidden = false;
-  $('tb-focus').hidden = false;
-  $('tb-browser').hidden = false;
+  if (typeof drawFocusButton === 'function') drawFocusButton();
   if (typeof bugsStart === 'function') bugsStart();
+  checkServerVersion();
   if (typeof maybeShowToday === 'function') maybeShowToday();
   setTimeout(() => typeof checkMilestones === 'function' && checkMilestones(), 4000);
 }
 
-$('tb-focus').addEventListener('click', () => toggleFocusPanel());
-$('tb-browser').addEventListener('click', () => call(studio.browser.open()).catch(() => {}));
+$('tb-focus').addEventListener('click', (e) => toggleFocusPanel(e.currentTarget));
+$('rail-browser').addEventListener('click', () => call(studio.browser.open()).catch(() => {}));
 
 $('tb-today').addEventListener('click', () => {
   if (S.me && typeof showToday === 'function') (TD.open ? closeToday() : showToday());
@@ -322,6 +334,7 @@ function setView(view) {
     if (was && !p.hidden && typeof fadeIn === 'function') fadeIn(p);
   }
   if (view === 'home' && typeof openHome === 'function') openHome();
+  if (typeof drawHubBack === 'function') drawHubBack();
   if (view === 'tools' && typeof openTools === 'function') openTools();
   if (view === 'admin') loadAdmin();
   if (view === 'profile') renderProfile();
@@ -329,12 +342,13 @@ function setView(view) {
   if (view === 'projects' && typeof openProjects === 'function') openProjects();
   if (view === 'contrib' && typeof openContrib === 'function') openContrib();
   if (view === 'bugs' && typeof openBugs === 'function') openBugs();
+  if (view === 'materials' && typeof openMaterials === 'function') openMaterials();
   if (view === 'chat') {
     markRead();
     $('composer-text').focus();
   }
 }
-for (const b of document.querySelectorAll('.rail-btn')) b.addEventListener('click', () => setView(b.dataset.view));
+for (const b of document.querySelectorAll('.rail-btn[data-view]')) b.addEventListener('click', () => setView(b.dataset.view));
 
 function setStatus(status) {
   S.status = status;
@@ -447,6 +461,9 @@ studio.chat.onEvent((ev) => {
       break;
     case 'subroom':
       onSubroomEvent(ev);
+      break;
+    case 'materials':
+      if (typeof onMaterialsEvent === 'function') onMaterialsEvent(ev);
       break;
     case 'presence': {
       const u = S.users.get(ev.user);
@@ -596,6 +613,20 @@ function renderHeader() {
   const imgOk = imagesAllowedIn(S.room);
   $('composer-img').hidden = !imgOk;
   if (!imgOk && chatAttach.count) chatAttach.clear();
+}
+
+// Сервер старее, чем нужно этой версии: новые разделы будут отвечать 404. Говорим сразу.
+async function checkServerVersion() {
+  try {
+    const r = await call(studio.app.server());
+    if (r.old || (!r.version && !r.unknown)) {
+      const el = h('div', { class: 'toast toast-warn' }, h('span', { text: 'Сервер версии ' + (r.version || 'старше 0.9.0') + ', а приложению нужен ' + r.need + '. Подчаты, картинки, баги и материалы не заработают, пока сервер не обновят (ПАМЯТКА, "Обновить сервер").' }));
+      $('toasts').append(el);
+      setTimeout(() => el.remove(), 20000);
+    }
+  } catch {
+    /* без проверки */
+  }
 }
 
 // ---------- подчаты ----------
@@ -853,10 +884,54 @@ async function loadAdmin() {
     renderAdminInvites(invites);
     if (typeof loadAdminAI === 'function') loadAdminAI();
     if (typeof loadAdminRules === 'function') loadAdminRules();
+    if (S.me.founder) loadStorage();
   } catch (err) {
     toast(errText(err.code));
   }
 }
+
+// Место на сервере: картинки чатов, скриншоты, история исправлений, база, диск.
+function fmtBytes(n) {
+  if (n >= 1024 ** 3) return (n / 1024 ** 3).toFixed(1).replace('.', ',') + ' ГБ';
+  if (n >= 1024 ** 2) return (n / 1024 ** 2).toFixed(1).replace('.', ',') + ' МБ';
+  return Math.round(n / 1024) + ' КБ';
+}
+
+async function loadStorage() {
+  const card = $('storage-card');
+  card.hidden = false;
+  const box = $('storage-body');
+  try {
+    const s = await call(studio.tickets.storage());
+    const g = (x) => x || { files: 0, bytes: 0 };
+    const rows = [
+      ['Картинки в подчатах', g(s.chat.sub), 'живут, пока жив подчат'],
+      ['Картинки в личных сообщениях', g(s.chat.dm), 'удаляются вместе с сообщением'],
+      ['Картинки в обсуждениях карточек', g(s.chat.card), 'удаляются вместе с карточкой'],
+      ['Скриншоты тикетов', g(s.chat.ticket), s.rejected ? 'отклонённых тикетов со скриншотами: ' + s.rejected + ', уедут через 7 дней после решения' : ''],
+      ['Загружены, но не отправлены', g(s.chat.loose), 'стираются через сутки'],
+      ['Скриншоты отчётов', s.shots, 'копия в R2, shots/'],
+      ['История исправлений', s.fixes, 'копия в R2, fixes/; на сервере ссылки на те же файлы, место почти не занимают'],
+      ['Ждут отправки в R2 и удаления', s.trash, 'уйдут ночью в studio/deleted-tickets/'],
+    ];
+    const chatTotal = Object.values(s.chat).reduce((a, x) => a + x.bytes, 0);
+    box.innerHTML = '';
+    box.append(
+      h('div', { class: 'tiles storage-tiles' },
+        h('div', { class: 'tile' }, h('div', { class: 'muted small', text: 'Картинки чатов' }), h('div', { class: 'tile-num', text: fmtBytes(chatTotal) })),
+        h('div', { class: 'tile' }, h('div', { class: 'muted small', text: 'База' }), h('div', { class: 'tile-num', text: fmtBytes(s.db) })),
+        s.total ? h('div', { class: 'tile' }, h('div', { class: 'muted small', text: 'Свободно на диске' }), h('div', { class: 'tile-num', text: fmtBytes(s.free) }), h('div', { class: 'muted small', text: 'из ' + fmtBytes(s.total) })) : null),
+      h('table', { class: 'table storage-table' },
+        h('tbody', {}, ...rows.map(([name, x, note]) => h('tr', {},
+          h('td', {}, h('div', { text: name }), note ? h('div', { class: 'muted small', text: note }) : null),
+          h('td', { class: 'num', text: String(x.files) }),
+          h('td', { class: 'num', text: fmtBytes(x.bytes) }))))),
+    );
+  } catch (err) {
+    box.textContent = errText(err.code);
+  }
+}
+$('storage-refresh').addEventListener('click', loadStorage);
 
 function showCode(label, code) {
   $('code-label').textContent = label;

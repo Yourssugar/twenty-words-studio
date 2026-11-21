@@ -132,3 +132,18 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 .b-toast { background: var(--panel-2); border: 1px solid var(--accent); border-radius: 13px; height: 26px; padding: 0 12px; display: flex; gap: 10px; align-items: center; white-space: nowrap; overflow: hidden; min-width: 0; }
 .b-toast span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .b-toast .b-link { padding: 0; }
+
+/* большие плитки студии над закладками */
+.b-studio { margin-top: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.b-studio-card {
+  display: flex; align-items: center; gap: 16px; padding: 20px 22px; border-radius: 18px; cursor: pointer;
+  background: color-mix(in srgb, var(--panel) 90%, transparent); border: 1px solid var(--accent-edge, var(--line));
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  transition: border-color .15s, transform .15s, box-shadow .15s;
+}
+.b-studio-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 25%, transparent); }
+.b-studio-ico { width: 56px; height: 56px; flex: none; border-radius: 16px; display: grid; place-items: center; background: var(--panel-2); overflow: hidden; }
+.b-studio-ico img { width: 34px; height: 34px; object-fit: contain; }
+.b-studio-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.b-studio-name { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.b-marks { margin-top: 18px; }
