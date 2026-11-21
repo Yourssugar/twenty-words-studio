@@ -49,8 +49,9 @@ function registerScheme(extra = []) {
 }
 
 class Tools {
-  constructor({ root, notify }) {
+  constructor({ root, notify, onWindow }) {
     this.root = root; // папка приложения
+    this.onWindow = onWindow || (() => {}); // окно открыто: развернуть по настройке, F11
     this.notify = notify; // (канал, данные) -> интерфейс
     this.dir = path.join(app.getPath('userData'), 'tools');
     this.forge = path.join(this.dir, 'forge');
@@ -249,6 +250,7 @@ class Tools {
       return { action: 'deny' };
     });
     w.loadURL(`${SCHEME}://forge/${t.entry}`);
+    this.onWindow(w);
     this.windows.set(id, w);
     w.on('closed', () => this.windows.delete(id));
     return true;

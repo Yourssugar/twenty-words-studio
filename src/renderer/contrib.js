@@ -120,6 +120,7 @@ async function contribRemind() {
   if (fresh.length) {
     const text = fresh.map((r) => r.note).join('; ');
     toast('Напоминание: ' + text + '. Раздел "Вклад".');
+    if (typeof uiSound === 'function') uiSound('remind');
     studio.app.notify('Напоминание', text).catch(() => {});
   }
   if (S.view === 'contrib' && CB.tab === 'mine') renderContrib();
@@ -138,6 +139,11 @@ function plural(n, one, few, many) {
 // ---------- раздел ----------
 
 async function openContrib() {
+  const teamEmpty = CB.tab === 'team' && typeof TM !== 'undefined' && !TM.data;
+  if (!CB.loaded || teamEmpty) {
+    $('contrib-body').innerHTML = '';
+    $('contrib-body').append(CB.tab === 'team' ? skeleton('tiles') : skeleton('card', 6));
+  }
   try {
     await Promise.all([loadReports(), loadReminders()]);
     if (S.me && S.me.founder) await loadQueue();
@@ -152,7 +158,10 @@ async function openContrib() {
 
 async function loadLinks() {
   if (S.me && S.me.founder) CB.refsAdmin = await call(studio.refs.admin(CB.refsMonth));
-  else CB.refs = { ...(await call(studio.refs.mine(CB.refsMonth))), base: await call(studio.refs.base()) };
+  else {
+    CB.refs = { ...(await call(studio.refs.mine(CB.refsMonth))), base: await call(studio.refs.base()) };
+    if (typeof milestonesSoon === 'function') milestonesSoon(); // первый переход по ссылке
+  }
 }
 
 function renderContrib() {
@@ -182,6 +191,8 @@ function renderContrib() {
   tabs.hidden = false;
   const box = $('contrib-body');
   box.innerHTML = '';
+  if (CB.lastTab !== CB.tab) fadeIn(box);
+  CB.lastTab = CB.tab;
   if (CB.tab === 'review') renderReview(box);
   else if (CB.tab === 'acct' && typeof renderAcct === 'function') renderAcct(box);
   else if (CB.tab === 'team' && typeof renderTeam === 'function') renderTeam(box);
@@ -220,7 +231,7 @@ function statusChip(r) {
 }
 
 function thumb(id) {
-  const el = h('div', { class: 'thumb', title: 'Открыть скриншот', onclick: () => showShot(id) }, h('span', { class: 'muted small', text: '...' }));
+  const el = h('div', { class: 'thumb', title: 'Открыть скриншот', onclick: () => showShot(id) }, h('div', { class: 'sk sk-fill' }));
   shotImage(id).then((url) => {
     el.innerHTML = '';
     el.append(h('img', { src: url, alt: 'скриншот' }));
@@ -644,7 +655,7 @@ function renderLinks(box) {
   }
   const r = CB.refs;
   if (!r) {
-    box.append(h('div', { class: 'card muted', text: 'Загрузка...' }));
+    box.append(skeleton('card', 4));
     loadLinks().then(() => renderContrib(), (err) => toast(errText(err.code)));
     return;
   }
@@ -654,8 +665,10 @@ function renderLinks(box) {
     h('p', { class: 'muted small', text: 'Делитесь ссылкой где угодно. Засчитывается уникальный посетитель за день по каждой ссылке. Переходы роботов и превью в мессенджерах не считаются. 100 переходов дают 2 балла.' }),
   );
   if (!r.targets.length) card.append(h('p', { class: 'muted', text: 'Основатель ещё не добавил, куда вести ссылки.' }));
-  r.targets.forEach((t, i) => {
-    const link = base + '/r/' + r.code + (i === 0 ? '' : '/' + t.slug);
+  // Всегда полная ссылка с кодом цели: она навсегда ведёт туда же, даже если
+  // основатель добавит новые цели или поменяет порядок.
+  r.targets.forEach((t) => {
+    const link = base + '/r/' + r.code + '/' + t.slug;
     card.append(h('div', { class: 'item-row' },
       h('div', { class: 'link-name', text: t.name }),
       h('code', { class: 'grow link-url', text: link }),
@@ -727,7 +740,7 @@ function refsTable(counts, targets, month, admin) {
 function renderLinksAdmin(box) {
   const r = CB.refsAdmin;
   if (!r) {
-    box.append(h('div', { class: 'card muted', text: 'Загрузка...' }));
+    box.append(skeleton('card', 4));
     loadLinks().then(() => renderContrib(), (err) => toast(errText(err.code)));
     return;
   }
@@ -736,7 +749,7 @@ function renderLinksAdmin(box) {
       h('h2', { text: 'Куда ведут ссылки' }),
       h('button', { class: 'btn btn-s', type: 'button', text: 'Добавить цель', onclick: () => editTarget() }),
     ),
-    h('p', { class: 'muted small', text: 'У каждого участника своя ссылка: адрес сервера/r/код ведёт на первую включённую цель, адрес сервера/r/код/код-цели на остальные. Адрес цели только https. Путь /r/ на сервере должен быть открыт для всех (если на домене включён Cloudflare Access, его нужно пропустить).' }),
+    h('p', { class: 'muted small', text: 'У каждого участника своя ссылка на каждую цель: адрес сервера/r/код/код-цели. Код цели лучше не менять: уже разложенные ссылки с прежним кодом поведут на первую включённую цель. Адрес цели только https. Путь /r/ на сервере должен быть открыт для всех (если на домене включён Cloudflare Access, его нужно пропустить).' }),
   );
   if (!r.targets.length) card.append(h('p', { class: 'muted', text: 'Целей пока нет. Добавьте сайт и YouTube-канал.' }));
   for (const t of r.targets) {
@@ -881,8 +894,17 @@ function reviewCard(r) {
 }
 
 // События сервера: новый отчёт (основателю) или проверка (участнику).
-function onReportsEvent() {
+function onReportsEvent(ev) {
   const jobs = [loadReports()];
+  // Участнику проверили отчёт: короткий сигнал (подтверждён или отклонён).
+  if (ev && ev.op === 'reviewed' && !(S.me && S.me.founder)) {
+    jobs[0] = jobs[0].then(() => {
+      const r = CB.reports.find((x) => x.id === ev.id);
+      if (!r) return;
+      if (r.status === 'ok' && typeof celebrateReport === 'function') celebrateReport(r);
+      else if (typeof uiSound === 'function') uiSound(r.status === 'ok' ? 'ok' : 'error');
+    });
+  }
   if (S.me && S.me.founder) jobs.push(loadQueue());
   // Подтверждение меняет баллы: вкладку "Команда" перечитываем, если она открыта.
   if (CB.tab === 'team' && S.view === 'contrib' && typeof loadTeam === 'function') jobs.push(loadTeam());

@@ -75,7 +75,7 @@ contextBridge.exposeInMainWorld('studio', {
     userAction: (id, action, role) => call('admin:userAction', { id, action, role }),
     deleteUser: (id) => call('admin:deleteUser', { id }),
   },
-  team: { stats: () => call('team:stats') },
+  team: { stats: () => call('team:stats'), feed: () => call('team:feed') },
   reports: {
     list: () => call('reports:list'),
     add: (r) => call('reports:add', r),
@@ -152,7 +152,21 @@ contextBridge.exposeInMainWorld('studio', {
     info: () => call('app:info'),
     copy: (text) => call('app:copy', { text }),
     notify: (title, body) => call('app:notify', { title, body }),
+    gpu: () => call('app:gpu'),
+    avatars: () => call('app:avatars'),
+    relaunch: () => call('app:relaunch'),
     restart: () => call('app:restart'),
     onUpdate: on('app:update'),
+  },
+  win: {
+    titlebar: (color, symbol) => call('win:titlebar', { color, symbol }),
+    fullscreen: () => call('win:fullscreen'),
+    dnd: (on) => call('win:dnd', { on }),
+    onState: on('win:state'),
+  },
+  music: {
+    studio: (force) => call('music:studio', { force }),
+    folder: () => call('music:folder'),
+    pickFolder: () => call('music:pickFolder'),
   },
 });

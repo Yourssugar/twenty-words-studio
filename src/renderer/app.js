@@ -129,7 +129,9 @@ function icons(root = document) {
 }
 
 const COLORS = ['#e9a23b', '#e5534b', '#3fb68b', '#4fa3ff', '#a371f7', '#ff7eb6', '#2ec4b6', '#c9d1d9'];
-const PRESETS = ['robot', 'cat', 'fox', 'owl', 'ghost', 'astronaut', 'wizard', 'knight', 'dragon', 'alien', 'panda', 'frog', 'octopus', 'bunny', 'pumpkin', 'snowman'];
+// Готовые аватарки: список приходит из assets/avatars/avatars.json при запуске.
+let PRESETS = ['robot', 'cat', 'fox', 'owl', 'ghost', 'astronaut', 'wizard', 'knight', 'dragon', 'alien', 'panda', 'frog', 'octopus', 'bunny', 'pumpkin', 'snowman'];
+studio.app.avatars().then((r) => { if (r.ok && r.data.length) PRESETS = r.data; }, () => {});
 
 function avatar(user, size = 32) {
   const a = (user && user.avatar) || {};
@@ -214,6 +216,10 @@ function setAuthMode(mode) {
 
 async function showAuth() {
   $('app').hidden = true;
+  $('tb-today').hidden = true;
+  $('tb-focus').hidden = true;
+  if (typeof FO !== 'undefined' && FO.on) stopFocus();
+  if (typeof closeToday === 'function') closeToday();
   $('auth').hidden = false;
   const s = await call(studio.settings.get());
   $('auth-server-url').textContent = s.serverUrl;
@@ -271,15 +277,30 @@ async function afterRules() {
   setStatus(await call(studio.chat.connect()));
   // Напоминание о скриншотах, когда уже известно, кто вошёл (основателю ещё очередь проверки).
   setTimeout(() => typeof contribRemind === 'function' && contribRemind(), 2500);
+  $('tb-today').hidden = false;
+  $('tb-focus').hidden = false;
+  if (typeof maybeShowToday === 'function') maybeShowToday();
+  setTimeout(() => typeof checkMilestones === 'function' && checkMilestones(), 4000);
 }
+
+$('tb-focus').addEventListener('click', () => toggleFocusPanel());
+
+$('tb-today').addEventListener('click', () => {
+  if (S.me && typeof showToday === 'function') (TD.open ? closeToday() : showToday());
+});
 
 function setView(view) {
   if (view === 'admin' && (!S.me || S.me.role !== 'admin')) view = 'home';
   if (S.view === 'home' && view !== 'home' && typeof leaveHome === 'function') leaveHome();
   if (S.view === 'projects' && view !== 'projects' && typeof flushDraft === 'function') flushDraft();
   S.view = view;
+  setTitleSection(view);
   for (const b of document.querySelectorAll('.rail-btn')) b.classList.toggle('is-on', b.dataset.view === view);
-  for (const p of document.querySelectorAll('[data-view-pane]')) p.hidden = p.dataset.viewPane !== view;
+  for (const p of document.querySelectorAll('[data-view-pane]')) {
+    const was = p.hidden;
+    p.hidden = p.dataset.viewPane !== view;
+    if (was && !p.hidden && typeof fadeIn === 'function') fadeIn(p);
+  }
   if (view === 'home' && typeof openHome === 'function') openHome();
   if (view === 'tools' && typeof openTools === 'function') openTools();
   if (view === 'admin') loadAdmin();
@@ -350,6 +371,7 @@ studio.chat.onEvent((ev) => {
       if (m.user !== S.me.id) {
         if (visible) studio.chat.send({ t: 'read', room: m.room, id: m.id });
         else r.unread = (r.unread || 0) + 1;
+        if (!visible && document.hasFocus() && typeof uiSound === 'function') uiSound('message');
       }
       if (m.room === S.room) renderLog({ stick: m.user === S.me.id });
       renderSide();
@@ -384,8 +406,12 @@ studio.chat.onEvent((ev) => {
     case 'rules':
       if (typeof checkRules === 'function') checkRules();
       break;
+    case 'feed':
+      if (typeof feedSoon === 'function' && S.view === 'home') feedSoon();
+      if (typeof milestonesSoon === 'function') milestonesSoon();
+      break;
     case 'reports':
-      if (typeof onReportsEvent === 'function') onReportsEvent();
+      if (typeof onReportsEvent === 'function') onReportsEvent(ev);
       break;
     case 'presence': {
       const u = S.users.get(ev.user);
@@ -847,6 +873,7 @@ async function renderProfile() {
   renderAvatarPicker();
   const s = await call(studio.settings.get());
   renderThemes(s.theme);
+  renderLookSettings(s);
   $('set-notify').checked = s.notifications;
   $('set-server').value = s.serverUrl;
   const info = await call(studio.app.info());
@@ -937,13 +964,17 @@ $('logout').addEventListener('click', async () => {
 // ---------- старт ----------
 
 icons();
-(async () => {
+// Старт после того, как прочитаны все скрипты страницы (look.js, player.js, разделы):
+// иначе ответ главного процесса может прийти раньше, чем они загрузятся.
+window.addEventListener('DOMContentLoaded', async () => {
   try {
-    applyTheme((await call(studio.settings.get())).theme);
+    const s = await call(studio.settings.get());
+    applyTheme(s.theme);
+    initLook(s);
   } catch {
     applyTheme('auto');
   }
   const st = await call(studio.auth.state());
   if (st.signedIn) enterApp();
   else showAuth();
-})();
+});

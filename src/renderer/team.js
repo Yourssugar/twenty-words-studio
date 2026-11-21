@@ -71,7 +71,7 @@ const shortMonth = (m) => {
 
 function renderTeam(box) {
   if (!TM.data) {
-    box.append(h('div', { class: 'card muted', text: 'Загрузка...' }));
+    box.append(skeleton('tiles'));
     loadTeam().then(() => renderContrib(), (err) => {
       box.innerHTML = '';
       box.append(h('div', { class: 'card muted', text: errText(err.code) }));

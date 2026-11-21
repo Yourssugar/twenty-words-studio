@@ -2,7 +2,8 @@
 // Интерфейс работает в песочнице и в сеть не ходит: все запросы к серверу
 // делает этот процесс, а интерфейс вызывает только функции из preload.js.
 
-const { app, BrowserWindow, ipcMain, session, shell, clipboard, Notification, Menu, safeStorage, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell, clipboard, Notification, Menu, safeStorage, dialog, screen } = require('electron');
+const { execFile } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -10,6 +11,7 @@ const { StudioClient, normalizeServerUrl } = require('./client');
 const { Tools, registerScheme } = require('./tools');
 const { Runner, schemePrivileges } = require('./runner');
 const { setupUpdater } = require('./updater');
+const { Music, musicPrivileges } = require('./music');
 
 const ROOT = path.join(__dirname, '..', '..');
 const RENDERER = path.join(__dirname, '..', 'renderer', 'index.html');
@@ -21,6 +23,7 @@ let client = null;
 let tools = null;
 let updater = null;
 let runner = null;
+let music = null;
 const names = new Map(); // id -> имя, для текста уведомлений
 const aiStreams = new Map(); // чат ассистента -> AbortController текущего ответа
 let myId = 0;
@@ -46,13 +49,49 @@ const config = readJson(path.join(ROOT, 'data', 'config.json'), {});
 const THEME_IDS = ['auto', 'workshop', 'spring', 'summer', 'autumn', 'winter'];
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 
+// Настройки оформления, музыки и окон: ключ -> [проверка, значение по умолчанию].
+const oneOf = (...v) => (x) => v.includes(x);
+const isBool = (x) => typeof x === 'boolean';
+const numIn = (lo, hi) => (x) => typeof x === 'number' && Number.isFinite(x) && x >= lo && x <= hi;
+const LOOK = {
+  bgImage: [isBool, true], // картинка сезона на фоне
+  bgDim: [numIn(0, 90), 35], // затемнение картинки, %
+  particles: [isBool, true], // сезонные частицы поверх картинки
+  todayScreen: [isBool, true], // экран "Сегодня" при первом входе за день
+  feedOpen: [isBool, true], // лента команды на главной развёрнута
+  celebrate: [isBool, true], // короткий праздник при успехах
+  celebrated: [(x) => !!x && typeof x === 'object' && !Array.isArray(x) && JSON.stringify(x).length < 2000, {}], // что уже праздновали
+  todayShown: [(x) => typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x), ''],
+  motion: [oneOf('auto', 'all', 'soft', 'off'), 'auto'], // анимации; auto: по настройке Windows
+  zoom: [oneOf(90, 100, 110, 125), 100],
+  uiSounds: [isBool, true],
+  musicAuto: [isBool, false], // включать музыку при запуске
+  musicPauseMin: [isBool, true], // пауза, когда окно свёрнуто
+  musicVolume: [numIn(0, 1), 0.5],
+  musicSource: [oneOf('studio', 'folder', 'radio', 'ambient'), 'studio'],
+  musicFolder: [(x) => typeof x === 'string' && x.length < 1000, ''],
+  musicRadio: [numIn(0, 19), 0],
+  musicAmbient: [oneOf('rain', 'wind', 'ocean', 'fire', 'pink', 'brown'), 'rain'],
+  editorsMode: [oneOf('window', 'maximized', 'fullscreen'), 'window'],
+  gpuHigh: [isBool, true], // мощная видеокарта, если их две
+  gpuAccel: [isBool, true], // аппаратное ускорение (выключать только при сбоях)
+};
+const cleanRadios = (v) =>
+  (Array.isArray(v) ? v : [])
+    .filter((r) => r && typeof r.url === 'string' && /^https?:\/\//i.test(r.url))
+    .slice(0, 20)
+    .map((r) => ({ name: String(r.name || '').slice(0, 60) || r.url.replace(/^https?:\/\//i, '').slice(0, 60), url: r.url.slice(0, 500) }));
+
 function getSettings() {
   const s = readJson(settingsFile(), {});
-  return {
+  const out = {
     serverUrl: normalizeServerUrl(s.serverUrl) || normalizeServerUrl(config.serverUrl) || 'http://127.0.0.1:8787',
     notifications: s.notifications !== false,
     theme: THEME_IDS.includes(s.theme) ? s.theme : 'auto',
+    musicRadios: cleanRadios(s.musicRadios),
   };
+  for (const [k, [ok, def]] of Object.entries(LOOK)) out[k] = ok(s[k]) ? s[k] : def;
+  return out;
 }
 
 function saveSettings(patch) {
@@ -91,22 +130,109 @@ const tokenStore = {
   },
 };
 
+// ---------- видеокарта ----------
+
+// Значения на момент запуска: видеокарта и ускорение меняются только перезапуском.
+let STARTUP = { gpuHigh: true, gpuAccel: true };
+
+// Windows выбирает видеокарту для программы по записи в реестре пользователя (то же
+// самое делает "Параметры, Дисплей, Графика"). 2: высокая производительность.
+// Флаг Chromium force_high_performance_gpu просит о том же изнутри.
+function setWindowsGpuPreference(high) {
+  if (process.platform !== 'win32') return;
+  const key = 'HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences';
+  const args = high
+    ? ['add', key, '/v', process.execPath, '/t', 'REG_SZ', '/d', 'GpuPreference=2;', '/f']
+    : ['delete', key, '/v', process.execPath, '/f'];
+  execFile('reg', args, { windowsHide: true }, () => {});
+}
+
+function setupGpu() {
+  const s = getSettings();
+  STARTUP = { gpuHigh: s.gpuHigh, gpuAccel: s.gpuAccel };
+  if (!s.gpuAccel) app.disableHardwareAcceleration();
+  else if (s.gpuHigh) app.commandLine.appendSwitch('force_high_performance_gpu');
+  if (s.gpuHigh) setWindowsGpuPreference(true);
+}
+
+// Какая видеокарта рисует окно: для строки в настройках.
+async function gpuInfo() {
+  const status = app.getGPUFeatureStatus();
+  let name = '';
+  try {
+    const info = await app.getGPUInfo('complete');
+    name = (info.auxAttributes && info.auxAttributes.glRenderer) || '';
+    const m = /ANGLE \(([^,]+),\s*([^,(]+?)(?:\s+Direct3D|\s*\(|,|\))/.exec(name);
+    if (m) name = m[2].trim();
+    if (!name && info.gpuDevice) {
+      const d = info.gpuDevice.find((x) => x.active) || info.gpuDevice[0];
+      if (d) name = d.description || d.deviceString || '';
+    }
+  } catch {
+    /* сведений нет */
+  }
+  return { name, accelerated: status.gpu_compositing === 'enabled' };
+}
+
 // ---------- окно ----------
 
 function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
 }
 
+// Размер и положение окна запоминаются. Если монитор с сохранённым окном отключён,
+// окно открывается на основном.
+const winStateFile = () => path.join(app.getPath('userData'), 'window.json');
+function loadWinState() {
+  const st = readJson(winStateFile(), {});
+  const b = st.bounds;
+  if (!b || ![b.x, b.y, b.width, b.height].every(Number.isFinite)) return { width: 1240, height: 800, maximized: false };
+  const area = screen.getDisplayMatching(b).workArea;
+  const visible = b.x < area.x + area.width - 80 && b.x + b.width > area.x + 80 && b.y >= area.y - 10 && b.y < area.y + area.height - 60;
+  return visible ? { ...b, maximized: !!st.maximized } : { width: b.width, height: b.height, maximized: !!st.maximized };
+}
+function saveWinState() {
+  if (!win || win.isDestroyed() || win.isMinimized() || win.isFullScreen()) return;
+  writeJson(winStateFile(), { bounds: win.isMaximized() ? win.getNormalBounds() : win.getBounds(), maximized: win.isMaximized() });
+}
+
+// F11 во весь экран в любом окне студии.
+function fullScreenKey(w) {
+  w.webContents.on('before-input-event', (e, input) => {
+    if (input.type === 'keyDown' && input.key === 'F11' && !input.control && !input.alt) {
+      e.preventDefault();
+      w.setFullScreen(!w.isFullScreen());
+    }
+  });
+}
+
+// Как открывать редакторы и запуск проектов: окном, развёрнутыми или во весь экран.
+function applyEditorsMode(w) {
+  const mode = getSettings().editorsMode;
+  if (mode === 'maximized') w.maximize();
+  else if (mode === 'fullscreen') w.setFullScreen(true);
+  fullScreenKey(w);
+}
+
+const TITLEBAR_H = 34;
+
 function createWindow() {
+  const st = loadWinState();
   win = new BrowserWindow({
-    width: 1240,
-    height: 800,
+    x: st.x,
+    y: st.y,
+    width: st.width,
+    height: st.height,
     minWidth: 920,
     minHeight: 600,
     title: 'Twenty Words Studio',
     icon: ICON,
     backgroundColor: '#0f1012',
     autoHideMenuBar: true,
+    // Своя полоса заголовка в цветах темы. Кнопки свернуть, развернуть, закрыть
+    // рисует Windows поверх неё, поэтому работают привязка к краям и меню Win+Z.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#0b0c0e', symbolColor: '#e8e6e1', height: TITLEBAR_H },
     show: false,
     webPreferences: {
       sandbox: true,
@@ -130,7 +256,25 @@ function createWindow() {
     }
   });
   win.on('focus', () => win.flashFrame(false));
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => {
+    if (st.maximized) win.maximize();
+    win.show();
+  });
+  win.webContents.on('did-finish-load', () => win.webContents.setZoomFactor(getSettings().zoom / 100));
+  fullScreenKey(win);
+  let saveTimer = null;
+  const saveSoon = () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveWinState, 400);
+  };
+  win.on('resize', saveSoon);
+  win.on('move', saveSoon);
+  win.on('close', saveWinState);
+  // Свёрнуто или нет: интерфейсу, чтобы ставить музыку и анимации на паузу.
+  for (const ev of ['minimize', 'hide']) win.on(ev, () => send('win:state', { hidden: true }));
+  for (const ev of ['restore', 'show']) win.on(ev, () => send('win:state', { hidden: false }));
+  win.on('enter-full-screen', () => send('win:state', { full: true }));
+  win.on('leave-full-screen', () => send('win:state', { full: false }));
   win.loadFile(RENDERER);
   win.on('closed', () => {
     win = null;
@@ -166,8 +310,10 @@ function setupClient() {
   });
 }
 
+let doNotDisturb = false; // режим фокуса в интерфейсе: без уведомлений о сообщениях
+
 function maybeNotify(m) {
-  if (m.user === myId || !getSettings().notifications) return;
+  if (m.user === myId || !getSettings().notifications || doNotDisturb) return;
   if (win && win.isFocused()) return;
   if (win) win.flashFrame(true);
   if (!Notification.isSupported()) return;
@@ -241,6 +387,7 @@ function registerIpc() {
     })),
   });
   handle('team:stats', () => client.request('GET', '/api/team/stats'));
+  handle('team:feed', () => client.request('GET', '/api/team/feed'));
   handle('reports:list', () => client.request('GET', '/api/reports'));
   handle('reports:add', (a) => client.request('POST', '/api/reports', reportBody(a)));
   handle('reports:edit', (a) => client.request('PUT', '/api/reports/' + need(a.id), reportBody(a)));
@@ -555,7 +702,7 @@ function registerIpc() {
   handle('tools:remove', (a) => tools.remove(toolId(a)));
   handle('tools:open', (a) => tools.open(toolId(a)));
 
-  handle('settings:get', () => getSettings());
+  handle('settings:get', () => ({ ...getSettings(), restartNeeded: STARTUP.gpuHigh !== getSettings().gpuHigh || STARTUP.gpuAccel !== getSettings().gpuAccel }));
   handle('settings:set', (a) => {
     const patch = {};
     if (a.serverUrl !== undefined) {
@@ -566,7 +713,15 @@ function registerIpc() {
     }
     if (a.notifications !== undefined) patch.notifications = !!a.notifications;
     if (a.theme !== undefined && THEME_IDS.includes(a.theme)) patch.theme = a.theme;
-    return saveSettings(patch);
+    // Папка с музыкой меняется только через окно выбора папки (music:pickFolder).
+    for (const [k, [ok]] of Object.entries(LOOK)) if (k !== 'musicFolder' && a[k] !== undefined && ok(a[k])) patch[k] = a[k];
+    if (a.musicRadios !== undefined) patch.musicRadios = cleanRadios(a.musicRadios);
+    const after = saveSettings(patch);
+    if (patch.zoom && win) win.webContents.setZoomFactor(after.zoom / 100);
+    if (patch.gpuHigh !== undefined && process.platform === 'win32') setWindowsGpuPreference(after.gpuHigh);
+    // Видеокарта и ускорение меняются только при запуске.
+    after.restartNeeded = STARTUP.gpuHigh !== after.gpuHigh || STARTUP.gpuAccel !== after.gpuAccel;
+    return after;
   });
 
   handle('app:info', () => ({ version: app.getVersion(), dev: DEV }));
@@ -589,6 +744,43 @@ function registerIpc() {
     n.show();
     return true;
   });
+  // Музыка
+  handle('music:studio', (a) => music.studioInfo(a.force === true));
+  handle('music:folder', () => music.folderInfo());
+  handle('music:pickFolder', async () => {
+    const dir = await music.pickFolder(win);
+    if (!dir) return null;
+    saveSettings({ musicFolder: dir, musicSource: 'folder' });
+    return music.folderInfo();
+  });
+  handle('win:titlebar', (a) => {
+    // Цвета полосы заголовка под тему: фон и значки кнопок.
+    const hex = (v, d) => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v : d);
+    if (win && typeof win.setTitleBarOverlay === 'function') {
+      win.setTitleBarOverlay({ color: hex(a.color, '#0b0c0e'), symbolColor: hex(a.symbol, '#e8e6e1'), height: TITLEBAR_H });
+    }
+    return { full: !!(win && win.isFullScreen()), platform: process.platform };
+  });
+  handle('win:dnd', (a) => {
+    doNotDisturb = a.on === true;
+    return doNotDisturb;
+  });
+  handle('win:fullscreen', () => {
+    if (win) win.setFullScreen(!win.isFullScreen());
+    return !!(win && win.isFullScreen());
+  });
+  handle('app:gpu', () => gpuInfo());
+  // Список готовых аватарок: assets/avatars/avatars.json (новые добавляются туда и файлом рядом).
+  handle('app:avatars', () => {
+    const list = readJson(path.join(__dirname, '..', 'assets', 'avatars', 'avatars.json'), { avatars: [] }).avatars || [];
+    return list
+      .filter((a) => a && /^[a-z0-9-]{1,40}$/.test(a.id || '') && fs.existsSync(path.join(__dirname, '..', 'assets', 'avatars', a.id + '.webp')))
+      .map((a) => a.id);
+  });
+  handle('app:relaunch', () => {
+    app.relaunch();
+    app.exit(0);
+  });
   handle('app:copy', (a) => {
     clipboard.writeText(str(a.text, 200000));
     return true;
@@ -597,7 +789,8 @@ function registerIpc() {
 
 // ---------- запуск ----------
 
-registerScheme([schemePrivileges]);
+registerScheme([schemePrivileges, musicPrivileges]);
+setupGpu();
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -615,10 +808,11 @@ if (!app.requestSingleInstanceLock()) {
     // Интерфейсу не нужны камера, микрофон, геопозиция и прочие разрешения браузера.
     session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
     setupClient();
-    tools = new Tools({ root: ROOT, notify: send });
+    tools = new Tools({ root: ROOT, notify: send, onWindow: applyEditorsMode });
     tools.setupSession();
     runner = new Runner({
       notify: send,
+      onWindow: applyEditorsMode,
       blockedHost: () => {
         try {
           return new URL(getSettings().serverUrl).hostname;
@@ -627,6 +821,8 @@ if (!app.requestSingleInstanceLock()) {
         }
       },
     });
+    music = new Music({ config, settings: getSettings });
+    music.setupProtocol();
     registerIpc();
     createWindow();
     updater = setupUpdater(send);

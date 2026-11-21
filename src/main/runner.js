@@ -44,7 +44,8 @@ function noStartPage() {
 }
 
 class Runner {
-  constructor({ notify, blockedHost }) {
+  constructor({ notify, blockedHost, onWindow }) {
+    this.onWindow = onWindow || (() => {});
     this.notify = notify; // (канал, данные) -> главное окно
     this.blockedHost = blockedHost; // () -> адрес сервера студии, к нему окну запуска нельзя
     this.runs = new Map(); // ключ -> { win, ses, files, net, title, start, logs }
@@ -188,6 +189,7 @@ class Runner {
         safeDialogs: true,
       },
     });
+    this.onWindow(win);
     const wc = win.webContents;
     wc.setWindowOpenHandler(({ url }) => {
       this.log(key, 'warning', 'Новые окна запрещены: ' + String(url).slice(0, 200));

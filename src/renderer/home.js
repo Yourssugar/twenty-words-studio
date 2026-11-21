@@ -27,9 +27,16 @@ const G = {
   raf: 0,
   t0: performance.now(),
   shift: 0, // сдвиг графа влево, когда открыт список карточек
+  fshift: 0, // сдвиг вправо, когда слева видна лента команды
   nodes: new Map(), // id ветки -> узел с точками кластера
   mouse: null,
+  pulses: new Map(), // id ветки -> время вспышки: в теме ветки новое сообщение или новая карточка
 };
+
+// Ветка коротко вспыхивает, когда в ней что-то происходит.
+function pulseBranch(id) {
+  if (id) G.pulses.set(id, performance.now());
+}
 
 // ---------- данные ----------
 
@@ -71,6 +78,10 @@ studio.chat.onEvent((ev) => {
     if (ev.op === 'card') {
       // Счётчики обсуждения у каждого свои: при правке карточки их не затираем.
       const old = B.cards.get(ev.card.id);
+      if (!old) {
+        pulseBranch(ev.card.branch);
+        if (typeof feedSoon === 'function') feedSoon();
+      }
       B.cards.set(ev.card.id, old ? { ...ev.card, msgs: old.msgs, unread: old.unread, last: old.last } : ev.card);
     } else if (ev.op === 'cardGone') {
       B.cards.delete(ev.id);
@@ -96,6 +107,7 @@ studio.chat.onEvent((ev) => {
     if (card) {
       card.msgs = (card.msgs || 0) + 1;
       card.last = m.ts;
+      pulseBranch(card.branch);
     }
     const open = B.topic === cardId && S.view === 'home';
     if (open) {
@@ -188,7 +200,7 @@ function syncNodes() {
 }
 
 function layout() {
-  const cx = G.w / 2 - G.shift;
+  const cx = G.w / 2 - G.shift + G.fshift;
   const cy = G.h / 2 + 10;
   const R = Math.max(150, Math.min(300, Math.min(G.w - G.shift * 2, G.h) * 0.33));
   const n = B.branches.length || 1;
@@ -199,9 +211,10 @@ function branchPos(i, t, L) {
   const a = -Math.PI / 2 + (i / L.n) * Math.PI * 2;
   const node = G.nodes.get(B.branches[i].id);
   const sway = node ? node.ph : 0;
+  const amp = 4 * (typeof motionAmp === 'function' ? motionAmp() : 1); // настройка "Анимации"
   return {
-    x: L.cx + Math.cos(a) * L.R * 1.25 + Math.sin(t * 0.35 + sway) * 4,
-    y: L.cy + Math.sin(a) * L.R + Math.cos(t * 0.3 + sway) * 4,
+    x: L.cx + Math.cos(a) * L.R * 1.25 + Math.sin(t * 0.35 + sway) * amp,
+    y: L.cy + Math.sin(a) * L.R + Math.cos(t * 0.3 + sway) * amp,
   };
 }
 
@@ -222,6 +235,8 @@ function resize() {
   c.height = Math.round(r.height * G.dpr);
   c.style.width = r.width + 'px';
   c.style.height = r.height + 'px';
+  // Узкое окно прячет ленту, широкое возвращает.
+  if (typeof FD !== 'undefined' && FD.loaded && FD.visible !== feedVisible()) renderFeed();
 }
 
 function frame(now) {
@@ -232,6 +247,8 @@ function frame(now) {
   const ctx = G.ctx;
   const targetShift = B.topic ? Math.min(290, G.w * 0.22) : B.open ? Math.min(200, G.w * 0.16) : 0;
   G.shift += (targetShift - G.shift) * 0.12;
+  const feedOn = typeof FD !== 'undefined' && FD.visible;
+  G.fshift += ((feedOn ? 140 : 0) - G.fshift) * 0.12;
 
   ctx.setTransform(G.dpr, 0, 0, G.dpr, 0, 0);
   ctx.clearRect(0, 0, G.w, G.h);
@@ -278,6 +295,43 @@ function frame(now) {
     }
   });
 
+  // вспышки веток: искра бежит от центра к ветке, вокруг ветки расходится кольцо
+  const amp = typeof motionAmp === 'function' ? motionAmp() : 1;
+  B.branches.forEach((b, i) => {
+    const at = G.pulses.get(b.id);
+    if (!at) return;
+    const age = (now - at) / 1000;
+    if (age > 2.6) {
+      G.pulses.delete(b.id);
+      return;
+    }
+    const p = pos[i];
+    if (amp > 0 && age < 0.9) {
+      const u = age / 0.9;
+      const dx = p.x - L.cx;
+      const dy = p.y - L.cy;
+      const qx = (L.cx + p.x) / 2 - dy * 0.12;
+      const qy = (L.cy + p.y) / 2 + dx * 0.12;
+      const ex = (1 - u) * (1 - u) * L.cx + 2 * (1 - u) * u * qx + u * u * p.x;
+      const ey = (1 - u) * (1 - u) * L.cy + 2 * (1 - u) * u * qy + u * u * p.y;
+      const sg = ctx.createRadialGradient(ex, ey, 0, ex, ey, 14);
+      sg.addColorStop(0, hexA(b.color, 0.95));
+      sg.addColorStop(1, hexA(b.color, 0));
+      ctx.fillStyle = sg;
+      ctx.beginPath();
+      ctx.arc(ex, ey, 14, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const k = Math.max(0, (age - (amp > 0 ? 0.7 : 0)) / 1.9);
+    if (k > 0 && k < 1) {
+      ctx.strokeStyle = hexA(b.color, 0.7 * (1 - k));
+      ctx.lineWidth = 2 - k;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, amp > 0 ? 40 + k * 70 : 60, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  });
+
   // кластеры веток
   B.branches.forEach((b, i) => {
     const node = G.nodes.get(b.id);
@@ -287,8 +341,9 @@ function frame(now) {
     node.fold += (target - node.fold) * 0.14;
     const f = node.fold * node.fold * (3 - 2 * node.fold);
     const pts = node.pts.map((q) => {
-      const sx = q.x + Math.sin(t * q.sp + q.ph) * 2.2;
-      const sy = q.y + Math.cos(t * q.sp * 0.9 + q.ph) * 2.2;
+      const qa = 2.2 * (typeof motionAmp === 'function' ? motionAmp() : 1);
+      const sx = q.x + Math.sin(t * q.sp + q.ph) * qa;
+      const sy = q.y + Math.cos(t * q.sp * 0.9 + q.ph) * qa;
       return { x: p.x + sx + (q.cx - sx) * f, y: p.y + sy + (q.cy - sy) * f };
     });
     const count = cardsOf(b.id).length;
@@ -361,7 +416,7 @@ function frame(now) {
   ctx.strokeStyle = hexA(accent.startsWith('#') ? accent : '#e9a23b', 0.35);
   ctx.setLineDash([2, 5]);
   ctx.beginPath();
-  ctx.arc(L.cx, L.cy, 54 + Math.sin(t * 0.6) * 1.5, 0, Math.PI * 2);
+  ctx.arc(L.cx, L.cy, 54 + Math.sin(t * 0.6) * 1.5 * (typeof motionAmp === 'function' ? motionAmp() : 1), 0, Math.PI * 2);
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.textAlign = 'center';
@@ -373,6 +428,56 @@ function frame(now) {
   ctx.fillStyle = 'rgba(232,230,225,.6)';
   ctx.fillText('STUDIO', L.cx, L.cy + 11);
   ctx.letterSpacing = '0px';
+  drawOnline(ctx, L, t);
+}
+
+// Кто сейчас в сети: кружки с первой буквой имени медленно ходят вокруг центра.
+// Под курсором видно имя.
+function drawOnline(ctx, L, t) {
+  if (!S.me) return;
+  const list = [...S.users.values()].filter((u) => u.online || u.id === S.me.id).sort((a, b) => a.id - b.id);
+  if (!list.length) return;
+  const amp = typeof motionAmp === 'function' ? motionAmp() : 1;
+  const R = 78;
+  let hoverName = '';
+  let hx = 0;
+  let hy = 0;
+  list.forEach((u, i) => {
+    const a = -Math.PI / 2 + (i / list.length) * Math.PI * 2 + t * 0.06 * amp;
+    const x = L.cx + Math.cos(a) * R;
+    const y = L.cy + Math.sin(a) * R;
+    const color = (u.avatar && /^#[0-9a-f]{6}$/i.test(u.avatar.color || '') && u.avatar.color) || '#7c6cff';
+    ctx.fillStyle = hexA(color, 0.9);
+    ctx.strokeStyle = 'rgba(10,11,13,.9)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 9px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText((u.name || '?').slice(0, 1).toUpperCase(), x, y + 0.5);
+    if (G.mouse && Math.hypot(G.mouse[0] - x, G.mouse[1] - y) < 11) {
+      hoverName = u.id === S.me.id ? u.name + ' (вы)' : u.name;
+      hx = x;
+      hy = y;
+    }
+  });
+  if (hoverName) {
+    ctx.font = '12px "Segoe UI", system-ui, sans-serif';
+    const w = ctx.measureText(hoverName).width + 14;
+    ctx.fillStyle = 'rgba(14,15,18,.92)';
+    ctx.strokeStyle = 'rgba(255,255,255,.18)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(hx - w / 2, hy - 34, w, 20, 5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#f2f0eb';
+    ctx.fillText(hoverName, hx, hy - 24);
+  }
 }
 
 function shortNote(s) {
@@ -428,6 +533,7 @@ function hideTip() {
 
 function onMove(e) {
   const r = G.canvas.getBoundingClientRect();
+  G.mouse = [e.clientX - r.left, e.clientY - r.top];
   const id = branchAt(e.clientX - r.left, e.clientY - r.top);
   if (id !== B.hover) {
     B.hover = id;
@@ -438,6 +544,7 @@ function onMove(e) {
 }
 
 function onLeave() {
+  G.mouse = null;
   B.hover = null;
   hideTip();
 }
@@ -476,6 +583,7 @@ const msgsLabel = (n) => {
 };
 
 function renderDrawer() {
+  if (typeof renderFeed === 'function') renderFeed(); // лента прячется, пока открыта ветка или тема
   $('home-count').textContent = B.loaded ? 'веток: ' + B.branches.length + ' · карточек: ' + B.cards.size : '';
   const box = $('home-drawer');
   if (B.topic && B.cards.has(B.topic)) {
@@ -758,6 +866,10 @@ function openHome() {
   }
   resize();
   if (!B.loaded) loadBoard();
+  if (typeof loadFeed === 'function') {
+    renderFeed();
+    loadFeed();
+  }
   if (!G.running) {
     G.running = true;
     G.raf = requestAnimationFrame(frame);

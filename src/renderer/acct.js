@@ -55,7 +55,7 @@ async function acctDo(fn, ok) {
 
 function renderAcct(box) {
   if (!AC.data) {
-    box.append(h('div', { class: 'card muted', text: 'Загрузка...' }));
+    box.append(skeleton('card', 6));
     loadAcct().then(() => renderContrib(), (err) => toast(errText(err.code)));
     return;
   }
