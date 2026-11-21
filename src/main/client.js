@@ -5,6 +5,7 @@
 //   'event'  (ev)      любое сообщение сервера по WebSocket (msg, presence, user, ...)
 //   'status' (status)  'offline' | 'connecting' | 'online'
 //   'signedOut' ()     сервер не принял токен: нужно войти заново
+//   'rulesRequired' () сначала нужно принять правила команды (ответ 451 или закрытие чата 4003)
 
 const { EventEmitter } = require('events');
 
@@ -101,6 +102,7 @@ class StudioClient extends EventEmitter {
     if (!res.ok) {
       const code = (data && data.error) || 'http_' + res.status;
       if (res.status === 401 && auth) this.signOutLocal();
+      if (res.status === 451) this.emit('rulesRequired');
       throw new ServerError(code, res.status);
     }
     return data;
@@ -131,6 +133,7 @@ class StudioClient extends EventEmitter {
         /* пусто */
       }
       if (res.status === 401) this.signOutLocal();
+      if (res.status === 451) this.emit('rulesRequired');
       throw new ServerError((data && data.error) || 'http_' + res.status, res.status);
     }
     const reader = res.body.getReader();
@@ -229,6 +232,12 @@ class StudioClient extends EventEmitter {
     ws.onclose = (e) => {
       if (this.ws !== ws) return;
       this.ws = null;
+      if (e.code === 4003) {
+        // Чат закрыт до согласия с правилами. Снова подключит приложение после согласия.
+        this.setStatus('offline');
+        this.emit('rulesRequired');
+        return;
+      }
       if (e.code === 1008) {
         // Сервер не принял токен: вход закрыт, заблокирован или удалён.
         this.setStatus('offline');

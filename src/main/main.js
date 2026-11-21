@@ -151,6 +151,7 @@ function setupClient() {
   });
   client.on('status', (s) => send('chat:status', s));
   client.on('signedOut', () => send('auth:signedOut'));
+  client.on('rulesRequired', () => send('rules:required'));
   client.on('event', (ev) => {
     if (ev.t === 'ready') {
       myId = ev.me.id;
@@ -217,6 +218,14 @@ function registerIpc() {
     await client.logout();
     return true;
   });
+
+  // Правила команды
+  handle('rules:get', () => client.request('GET', '/api/rules'));
+  handle('rules:accept', (a) =>
+    client.request('POST', '/api/rules/accept', { version: int(a.version), firstName: str(a.firstName, 100), lastName: str(a.lastName, 100), email: str(a.email, 160) }));
+  handle('admin:rules', () => client.request('GET', '/api/admin/rules'));
+  handle('admin:rulesDraft', (a) => client.request('PUT', '/api/admin/rules/draft', { body: str(a.body, 60000), changes: str(a.changes, 4000) }));
+  handle('admin:rulesPublish', () => client.request('POST', '/api/admin/rules/publish'));
 
   handle('chat:connect', () => {
     client.connect();
@@ -311,7 +320,7 @@ function registerIpc() {
     aiStreams.set(id, ctrl);
     let last = null;
     try {
-      await client.stream(path, { text: str(a.text, 20000), files: ids(a.files, 20) }, (ev) => {
+      await client.stream(path, { text: str(a.text, 20000), files: ids(a.files, 20), memo: a.memo === true }, (ev) => {
         if (ev.t === 'done' || ev.t === 'error') last = ev;
         send('ai:event', { chatId: id, ...ev });
       }, ctrl.signal);
@@ -323,7 +332,8 @@ function registerIpc() {
       aiStreams.delete(id);
     }
   });
-  handle('ai:estimate', (a) => client.request('POST', chatPath(a) + '/estimate', { text: str(a.text, 20000), files: ids(a.files, 20) }));
+  handle('ai:estimate', (a) => client.request('POST', chatPath(a) + '/estimate', { text: str(a.text, 20000), files: ids(a.files, 20), memo: a.memo === true }));
+  handle('ai:compress', (a) => client.request('POST', chatPath(a) + '/compress'));
   handle('ai:skills', () => client.request('GET', '/api/ai/skills'));
   handle('ai:stop', (a) => {
     const c = aiStreams.get(int(a.chatId));
@@ -359,7 +369,9 @@ function registerIpc() {
   handle('admin:aiModel', (a) => {
     const name = str(a.name, 80);
     if (!/^[\w.:-]{1,80}$/.test(name)) throw Object.assign(new Error('bad_input'), { code: 'bad_input' });
-    return client.request('PUT', '/api/admin/ai/models/' + encodeURIComponent(name), { ctx: int(a.ctx) });
+    const body = { ctx: int(a.ctx) };
+    if (['', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh'].includes(a.effort)) body.effort = a.effort;
+    return client.request('PUT', '/api/admin/ai/models/' + encodeURIComponent(name), body);
   });
   handle('admin:aiDeleteModel', (a) => {
     const name = str(a.name, 80);

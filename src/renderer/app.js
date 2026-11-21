@@ -258,6 +258,13 @@ $('auth-server-save').addEventListener('click', async () => {
 async function enterApp() {
   $('auth').hidden = true;
   $('app').hidden = false;
+  // Пока правила не приняты, сервер закрывает всё остальное: сначала экран правил.
+  if (typeof checkRules === 'function' && (await checkRules())) return;
+  afterRules();
+}
+
+// После согласия с правилами (или если принимать нечего).
+async function afterRules() {
   setView(S.view);
   setStatus(await call(studio.chat.connect()));
 }
@@ -369,6 +376,9 @@ studio.chat.onEvent((ev) => {
       break;
     }
 
+    case 'rules':
+      if (typeof checkRules === 'function') checkRules();
+      break;
     case 'presence': {
       const u = S.users.get(ev.user);
       if (u) {
@@ -684,6 +694,7 @@ async function loadAdmin() {
     renderAdminUsers(users);
     renderAdminInvites(invites);
     if (typeof loadAdminAI === 'function') loadAdminAI();
+    if (typeof loadAdminRules === 'function') loadAdminRules();
   } catch (err) {
     toast(errText(err.code));
   }
@@ -760,22 +771,30 @@ async function adminDelete(u) {
 function renderAdminUsers(users) {
   const tb = $('admin-users');
   tb.innerHTML = '';
+  const founder = !!S.me.founder;
+  // Основатель меняет роли и работает с админами. Обычный админ только с участниками.
+  $('inv-role').querySelector('option[value="admin"]').hidden = !founder;
+  if (!founder) $('inv-role').value = 'member';
   for (const u of users) {
     const self = u.id === S.me.id;
     const status = u.blocked ? h('span', { class: 'tag tag-danger', text: 'заблокирован' }) : h('span', { class: u.online ? 'ok' : 'muted', text: seenLabel(u) });
-    const actions = self
-      ? h('span', { class: 'muted small', text: 'это вы' })
-      : h('div', { class: 'row end gap-s' },
-          h('button', { class: 'btn btn-s', text: 'Сброс пароля', onclick: () => adminAction(u, 'reset') }),
-          h('button', { class: 'btn btn-s', text: u.role === 'admin' ? 'Снять админа' : 'Сделать админом', onclick: () => adminAction(u, u.role === 'admin' ? 'makeMember' : 'makeAdmin') }),
-          h('button', { class: 'btn btn-s', text: u.blocked ? 'Разблокировать' : 'Заблокировать', onclick: () => adminAction(u, u.blocked ? 'unblock' : 'block') }),
-          h('button', { class: 'btn btn-s btn-danger-ghost', text: 'Удалить', onclick: () => adminDelete(u) }),
-        );
+    let actions;
+    if (self) actions = h('span', { class: 'muted small', text: 'это вы' });
+    else if (u.founder) actions = h('span', { class: 'muted small', text: 'основатель' });
+    else if (u.role === 'admin' && !founder) actions = h('span', { class: 'muted small', text: 'админа меняет основатель' });
+    else {
+      actions = h('div', { class: 'row end gap-s' },
+        h('button', { class: 'btn btn-s', text: 'Сброс пароля', onclick: () => adminAction(u, 'reset') }),
+        founder ? h('button', { class: 'btn btn-s', text: u.role === 'admin' ? 'Снять админа' : 'Сделать админом', onclick: () => adminAction(u, u.role === 'admin' ? 'makeMember' : 'makeAdmin') }) : null,
+        h('button', { class: 'btn btn-s', text: u.blocked ? 'Разблокировать' : 'Заблокировать', onclick: () => adminAction(u, u.blocked ? 'unblock' : 'block') }),
+        h('button', { class: 'btn btn-s btn-danger-ghost', text: 'Удалить', onclick: () => adminDelete(u) }),
+      );
+    }
     tb.append(h('tr', { class: u.blocked ? 'is-blocked' : '' },
       h('td', {}, avatar(u, 28)),
       h('td', { text: u.name }),
       h('td', { class: 'mono', text: u.login }),
-      h('td', { text: u.role === 'admin' ? 'админ' : 'участник' }),
+      h('td', { text: u.founder ? 'основатель' : u.role === 'admin' ? 'админ' : 'участник' }),
       h('td', {}, status),
       h('td', {}, actions),
     ));
@@ -896,6 +915,8 @@ $('set-server-save').addEventListener('click', async () => {
     toast(errText(err.code));
   }
 });
+
+$('rules-open').addEventListener('click', () => openRulesView());
 
 $('logout').addEventListener('click', async () => {
   if (!(await modal({ title: 'Выйти из аккаунта?', body: 'Чтобы вернуться, понадобятся логин и пароль.', ok: 'Выйти' }))) return;

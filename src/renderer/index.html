@@ -154,6 +154,7 @@
           <div class="row gap-s" id="ai-tools">
             <select id="ai-model" title="Модель этого чата"></select>
             <button class="btn btn-s" type="button" id="ai-system-btn" title="Что модель должна знать в этом чате">Установка</button>
+            <button class="btn btn-s" type="button" id="ai-compress-btn" title="Свернуть весь разговор в короткую памятку: дальше модель видит её и новые сообщения">Сжать</button>
             <button class="btn btn-s" type="button" id="ai-summary-btn" title="Что модель помнит о ранней части разговора">Памятка</button>
             <button class="btn btn-s" type="button" id="ai-rename-btn">Переименовать</button>
             <button class="btn btn-s btn-danger-ghost" type="button" id="ai-delete-btn">Удалить</button>
@@ -226,6 +227,11 @@
           </table>
         </div>
 
+        <div class="card" id="admin-rules-card" hidden>
+          <h2>Правила команды</h2>
+          <div id="admin-rules"></div>
+        </div>
+
         <div class="card" id="admin-ai-card">
           <h2>Ассистент</h2>
           <div class="admin-sub">Установка для всех чатов</div>
@@ -293,6 +299,13 @@
           <div class="themes" id="theme-list"></div>
         </div>
         <div class="card">
+          <h2>Правила команды</h2>
+          <div class="row between">
+            <span class="muted small">Условия сотрудничества: ролики, тестирование, баллы, выплаты.</span>
+            <button class="btn" type="button" id="rules-open">Открыть</button>
+          </div>
+        </div>
+        <div class="card">
           <h2>Приложение</h2>
           <label class="check"><input type="checkbox" id="set-notify"> Уведомления о новых сообщениях, когда окно свёрнуто</label>
           <div class="field">
@@ -307,6 +320,8 @@
       </div>
     </div>
   </section>
+
+  <div class="rules-gate" id="rules-gate" hidden></div>
 
   <div class="modal" id="modal" hidden>
     <div class="modal-card" role="dialog" aria-modal="true">
@@ -326,5 +341,6 @@
   <script src="tools.js"></script>
   <script src="assistant.js"></script>
   <script src="projects.js"></script>
+  <script src="rules.js"></script>
 </body>
 </html>

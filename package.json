@@ -1,7 +1,7 @@
 {
   "name": "twenty-words-studio",
   "productName": "Twenty Words Studio",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Рабочее приложение команды Twenty Words Studio",
   "main": "src/main/main.js",
   "author": "Twenty Words Studio",

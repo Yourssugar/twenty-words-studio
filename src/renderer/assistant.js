@@ -15,6 +15,8 @@ const AI = {
   attach: [], // файлы проектов к следующему сообщению: [{id, title, body}]
   filesProject: 0, // какой проект показан в панели "Файлы"
   notesOpen: false, // панель "Файлы" открыта
+  memo: false, // с файлами: добавить ли памятку чата (история не уходит никогда)
+  compressing: false,
   est: null, // оценка токенов для текущего ввода
 };
 
@@ -22,6 +24,8 @@ Object.assign(ERRORS, {
   too_long: 'Не влезает в объём контекста модели. Уберите часть вложений или сократите текст.',
   too_many: 'Слишком много: к одному сообщению до 20 файлов, проектов до 50.',
   bad_title: 'Нужно название.',
+  bad_effort: 'Неизвестное значение размышления.',
+  nothing_to_compress: 'Сжимать нечего: после прошлой памятки новых сообщений нет.',
 });
 
 // Модель открытого чата: своя, а если она недоступна, модель по умолчанию.
@@ -223,6 +227,9 @@ function renderAILog(stick) {
     log.append(aiBubble(m.role, m.content, m, false, dur));
     prev = m;
   }
+  if (!foldShown && upto && AI.messages.length && AI.messages[AI.messages.length - 1].id <= upto) {
+    log.append(h('div', { class: 'day', text: 'выше: сжато в памятку, модель видит только её' }));
+  }
   if (AI.streaming && AI.streaming.chatId === AI.chat.id) {
     log.append(aiBubble('assistant', AI.streaming.text, null, true));
   }
@@ -245,7 +252,7 @@ function aiBubble(role, content, m, live, dur) {
     const keep = h('button', { class: 'mini', type: 'button', text: 'в черновики', title: 'Сохранить весь ответ файлом .md в Черновики' });
     keep.addEventListener('click', () => saveToDrafts('md', content, keep));
     meta = h('div', { class: 'ai-meta row gap-s' },
-      m.tokensIn || m.tokensOut ? h('span', { text: `${fmtTokens(m.tokensIn + m.tokensOut)} токенов` }) : null,
+      m.tokensIn || m.tokensOut ? h('span', { title: 'Вход ' + fmtTokens(m.tokensIn || 0) + ', ответ ' + fmtTokens(m.tokensOut || 0) + (m.tokensThink ? ', из него размышление ' + fmtTokens(m.tokensThink) : ''), text: `${fmtTokens(m.tokensIn + m.tokensOut)} токенов` + (m.tokensThink ? `, размышление ${fmtTokens(m.tokensThink)}` : '') }) : null,
       dur > 0 ? h('span', { text: 'ответ за ' + fmtDur(dur) }) : null,
       keep);
   }
@@ -339,6 +346,37 @@ async function editField(field, title, hint) {
 }
 
 $('ai-system-btn').addEventListener('click', () => editField('system', 'Установка чата', 'Уходит модели в каждом запросе этого чата. Например: "Помогаешь писать браузерные игры на чистом JS, без фреймворков".'));
+$('ai-compress-btn').addEventListener('click', async () => {
+  if (!AI.chat || AI.compressing) return;
+  if (AI.streaming) {
+    toast(errText('busy'));
+    return;
+  }
+  const body = h('div', {},
+    h('p', { text: 'Весь разговор свернётся в короткую памятку: цель, решения, имена файлов, открытые вопросы. Дальше модель видит только памятку и новые сообщения, так каждый запрос дешевле.' }),
+    h('p', { class: 'muted small', text: 'Переписка на экране останется. Памятку пишет модель для памяток (обычно GPT-mini), это расход токенов примерно на объём переписки. Памятку можно поправить кнопкой "Памятка".' }),
+  );
+  if (!(await modal({ title: 'Сжать разговор?', body, ok: 'Сжать' }))) return;
+  const btn = $('ai-compress-btn');
+  AI.compressing = true;
+  btn.disabled = true;
+  btn.textContent = 'Сжимаю...';
+  try {
+    const r = await call(studio.ai.compress(AI.chat.id));
+    if (AI.chat && AI.chat.id === r.chat.id) Object.assign(AI.chat, r.chat);
+    toast('Сжато сообщений: ' + r.folded + '. Дальше модель видит памятку и новые сообщения.');
+    renderAI();
+    scheduleEstimate(0);
+    refreshQuota();
+  } catch (err) {
+    toast(errText(err.code));
+  } finally {
+    AI.compressing = false;
+    btn.disabled = false;
+    btn.textContent = 'Сжать';
+  }
+});
+
 $('ai-summary-btn').addEventListener('click', () => editField('summary', 'Памятка', 'Сюда модель сворачивает раннюю часть разговора, чтобы не тратить токены на всю историю. Если что-то важное потерялось, допишите сами.'));
 
 $('ai-model').addEventListener('change', async (e) => {
@@ -428,7 +466,7 @@ $('ai-composer').addEventListener('submit', async (e) => {
   renderChatList();
   renderAILog(true);
   try {
-    const final = await call(studio.ai.send(chatId, text, files));
+    const final = await call(studio.ai.send(chatId, text, files, AI.memo));
     if (!final || final.t !== 'error') {
       AI.attach = [];
       renderBar();
@@ -636,6 +674,18 @@ function renderBar() {
   for (const a of AI.attach) {
     box.append(h('span', { class: 'chip', title: a.title }, h('span', { text: a.title.split('/').slice(1).join('/') || a.title }), h('button', { class: 'chip-x', type: 'button', title: 'Не прикладывать', text: 'x', onclick: () => toggleAttach(a) })));
   }
+  if (AI.attach.length) {
+    // С файлами модель видит только их и вопрос. Памятку можно добавить галочкой.
+    const memo = h('input', { type: 'checkbox' });
+    memo.checked = AI.memo;
+    memo.disabled = !AI.chat.summary;
+    memo.addEventListener('change', () => {
+      AI.memo = memo.checked;
+      scheduleEstimate(0);
+    });
+    box.append(h('label', { class: 'ai-memo', title: AI.chat.summary ? 'Добавить к файлам памятку этого чата' : 'В этом чате ещё нет памятки' },
+      h('span', { class: 'muted small', text: 'только файлы, без истории' }), memo, h('span', { class: 'small', text: 'с памяткой' })));
+  }
   renderEstimate();
 }
 
@@ -649,7 +699,9 @@ function renderEstimate() {
   el.textContent = (e.fits ? 'около ' : 'не влезает: ') + fmtTokens(e.tokens) + ' из ' + fmtTokens(e.ctx) + ' токенов';
   el.classList.toggle('is-over', !e.fits);
   el.classList.toggle('is-high', e.fits && e.tokens > e.ctx * 0.75);
-  el.title = 'Примерно столько токенов уйдёт в модель: установка, скиллы, памятка, ' + (e.history || 0) + ' сообщ. истории, вложения и текст. Ответ до ' + fmtTokens(e.out || 8000) + ' сверху.';
+  el.title = AI.attach.length
+    ? 'Примерно столько токенов уйдёт в модель: установка, скиллы, ' + (AI.memo ? 'памятка, ' : '') + 'файлы и текст. История чата с файлами не уходит. Ответ до ' + fmtTokens(e.out || 8000) + ' сверху.'
+    : 'Примерно столько токенов уйдёт в модель: установка, скиллы, памятка, ' + (e.history || 0) + ' сообщ. истории и текст. Ответ до ' + fmtTokens(e.out || 8000) + ' сверху.';
 }
 
 let estTimer = 0;
@@ -664,7 +716,7 @@ function scheduleEstimate(delay = 450) {
     }
     const seq = ++estSeq;
     try {
-      const r = await call(studio.ai.estimate(AI.chat.id, aiText.value, AI.attach.map((a) => a.id)));
+      const r = await call(studio.ai.estimate(AI.chat.id, aiText.value, AI.attach.map((a) => a.id), AI.memo));
       if (seq === estSeq) {
         AI.est = r;
         renderEstimate();
@@ -897,13 +949,23 @@ function renderAdminExtras(d) {
   if (!d.models.length) md.append(h('p', { class: 'muted small', text: 'Модели ещё не подключены.' }));
   for (const m of d.models) {
     const ctx = h('input', { type: 'number', min: String(d.rules.ctxMin || 4000), max: String(d.rules.ctxMax || 1000000), step: '4000', value: m.ctx });
+    // Размышление оплачивается как ответ, хотя его не видно. У GLM "без размышления" выключает его, остальное включает.
+    const effort = h('select', {},
+      h('option', { value: '', text: 'как у провайдера' }),
+      h('option', { value: 'none', text: 'без размышления' }),
+      h('option', { value: 'low', text: 'немного' }),
+      h('option', { value: 'medium', text: 'средне' }),
+      h('option', { value: 'high', text: 'много' }),
+    );
+    effort.value = m.effort || '';
     md.append(h('div', { class: 'row wrap gap-s model-row' },
       h('b', { class: 'model-name', text: m.label }),
       h('span', { class: 'muted small', text: m.name }),
       h('label', { class: 'inline' }, 'контекст за запрос, токенов', ctx),
+      h('label', { class: 'inline', title: 'Скрытое размышление перед ответом. Оплачивается как ответ. Сколько ушло, видно под ответом в чате.' }, 'размышление', effort),
       h('button', { class: 'btn btn-s', type: 'button', text: 'Сохранить', onclick: async () => {
         try {
-          await call(studio.admin.aiModel(m.name, Number(ctx.value) || 0));
+          await call(studio.admin.aiModel(m.name, Number(ctx.value) || 0, effort.value));
           toast('Сохранено: ' + m.label);
           loadAdminAI();
         } catch (err) {
