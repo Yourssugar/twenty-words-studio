@@ -247,6 +247,12 @@ async function showAuth() {
   $('app').hidden = true;
   $('tb-today').hidden = true;
   $('tb-focus').hidden = true;
+  $('tb-core').hidden = true;
+  if (typeof CR !== 'undefined') {
+    if (CR.mem) coreSave();
+    CR.mem = null;
+    hideCoreCard(true);
+  }
   if (typeof FO !== 'undefined' && FO.on) stopFocus();
   if (typeof closeToday === 'function') closeToday();
   $('auth').hidden = false;
@@ -310,6 +316,8 @@ async function afterRules() {
   if (typeof drawFocusButton === 'function') drawFocusButton();
   if (typeof bugsStart === 'function') bugsStart();
   checkServerVersion();
+  $('tb-core').hidden = false;
+  if (typeof coreStart === 'function') coreStart();
   if (typeof maybeShowToday === 'function') maybeShowToday();
   setTimeout(() => typeof checkMilestones === 'function' && checkMilestones(), 4000);
 }
@@ -335,6 +343,7 @@ function setView(view) {
   }
   if (view === 'home' && typeof openHome === 'function') openHome();
   if (typeof drawHubBack === 'function') drawHubBack();
+  if (typeof coreOnView === 'function') coreOnView();
   if (view === 'tools' && typeof openTools === 'function') openTools();
   if (view === 'admin') loadAdmin();
   if (view === 'profile') renderProfile();
@@ -1073,6 +1082,7 @@ async function renderProfile() {
   const s = await call(studio.settings.get());
   renderThemes(s.theme);
   renderLookSettings(s);
+  if (typeof renderCoreSettings === 'function') renderCoreSettings();
   $('set-notify').checked = s.notifications;
   $('set-server').value = s.serverUrl;
   const info = await call(studio.app.info());

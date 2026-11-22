@@ -14,6 +14,8 @@ const { setupUpdater } = require('./updater');
 const { Music, musicPrivileges } = require('./music');
 const { Browser } = require('./browser');
 const { Materials } = require('./materials');
+const { Core } = require('./core');
+const { RadioCatalog } = require('./radio');
 
 const ROOT = path.join(__dirname, '..', '..');
 const RENDERER = path.join(__dirname, '..', 'renderer', 'index.html');
@@ -28,6 +30,8 @@ let runner = null;
 let music = null;
 let browser = null;
 let materials = null;
+let core = null;
+let radio = null;
 const MIN_SERVER = '0.9.0'; // сервер, который нужен этой версии приложения
 const names = new Map(); // id -> имя, для текста уведомлений
 const aiStreams = new Map(); // чат ассистента -> AbortController текущего ответа
@@ -88,6 +92,8 @@ const LOOK = {
   todayScreen: [isBool, true], // экран "Сегодня" при первом входе за день
   feedOpen: [isBool, true], // лента команды на главной развёрнута
   celebrate: [isBool, true], // короткий праздник при успехах
+  coreMode: [oneOf('often', 'rare', 'off'), 'often'], // как часто появляется Юна
+  yunaLook: [oneOf('a', 'b', 'c'), 'a'], // как выглядит Юна
   focusOrder: [(x) => Array.isArray(x) && x.length <= 8 && x.every((v) => typeof v === 'string' && /^[a-z]{1,20}$/.test(v)), []], // порядок блоков фокуса
   celebrated: [(x) => !!x && typeof x === 'object' && !Array.isArray(x) && JSON.stringify(x).length < 2000, {}], // что уже праздновали
   todayShown: [(x) => typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x), ''],
@@ -100,7 +106,7 @@ const LOOK = {
   musicVolume: [numIn(0, 1), 0.5],
   musicSource: [oneOf('studio', 'folder', 'radio', 'ambient'), 'studio'],
   musicFolder: [(x) => typeof x === 'string' && x.length < 1000, ''],
-  musicRadio: [numIn(0, 19), 0],
+  musicRadio: [numIn(0, 49), 0],
   musicAmbient: [oneOf('rain', 'wind', 'ocean', 'fire', 'pink', 'brown'), 'rain'],
   editorsMode: [oneOf('window', 'maximized', 'fullscreen'), 'window'],
   linksInBrowser: [isBool, true], // ссылки из чата: во встроенном браузере или в системном
@@ -110,8 +116,12 @@ const LOOK = {
 const cleanRadios = (v) =>
   (Array.isArray(v) ? v : [])
     .filter((r) => r && typeof r.url === 'string' && /^https?:\/\//i.test(r.url))
-    .slice(0, 20)
-    .map((r) => ({ name: String(r.name || '').slice(0, 60) || r.url.replace(/^https?:\/\//i, '').slice(0, 60), url: r.url.slice(0, 500) }));
+    .slice(0, 50)
+    .map((r) => {
+      const out = { name: String(r.name || '').slice(0, 60) || r.url.replace(/^https?:\/\//i, '').slice(0, 60), url: r.url.slice(0, 500) };
+      if (typeof r.uuid === 'string' && /^[0-9a-f-]{36}$/.test(r.uuid)) out.uuid = r.uuid; // станция из каталога
+      return out;
+    });
 
 function getSettings() {
   const s = readJson(settingsFile(), {});
@@ -391,15 +401,18 @@ function registerIpc() {
   handle('auth:login', async (a) => {
     const user = await client.login(str(a.login, 64), str(a.password, 256));
     client.connect();
+    if (user && user.id) await core.onPassword(user.id, str(a.password, 256));
     return user;
   });
   handle('auth:register', async (a) => {
     const user = await client.register(str(a.code, 64), str(a.login, 64), str(a.name, 64), str(a.password, 256));
     client.connect();
+    if (user && user.id) await core.onPassword(user.id, str(a.password, 256));
     return user;
   });
   handle('auth:logout', async () => {
     await client.logout();
+    core.logout();
     return true;
   });
 
@@ -613,7 +626,19 @@ function registerIpc() {
     if (a.avatar && typeof a.avatar === 'object') body.avatar = { type: str(a.avatar.type, 16), id: str(a.avatar.id, 40) || undefined, color: str(a.avatar.color, 7) };
     return client.request('PATCH', '/api/me', body);
   });
-  handle('api:password', (a) => client.request('POST', '/api/me/password', { old: str(a.old, 256), new: str(a.new, 256) }));
+  handle('api:password', async (a) => {
+    const r = await client.request('POST', '/api/me/password', { old: str(a.old, 256), new: str(a.new, 256) });
+    await core.rekey(str(a.new, 256)); // память Core перешифровывается под новый пароль
+    return r;
+  });
+  // Память Core: расшифровывается только здесь, на сервер уходит шифротекст
+  handle('core:load', (a) => core.load(need(a.uid)));
+  handle('core:save', (a) => {
+    const text = JSON.stringify(a.mem || {});
+    if (text.length > 90000) throw Object.assign(new Error('too_big'), { code: 'too_big' });
+    return core.save(JSON.parse(text));
+  });
+  handle('core:forget', () => core.forget());
   handle('api:users', () => client.request('GET', '/api/users'));
   handle('api:rooms', () => client.request('GET', '/api/rooms'));
   handle('api:messages', (a) => {
@@ -867,6 +892,16 @@ function registerIpc() {
   // Музыка
   handle('music:studio', (a) => music.studioInfo(a.force === true));
   handle('music:folder', () => music.folderInfo());
+  // Каталог радио: поиск и добавление найденной станции в "Мои станции" (ссылку знает только main).
+  handle('radio:search', (a) => radio.search(a || {}));
+  handle('radio:add', (a) => {
+    const st = radio.station(String(a.uuid || ''));
+    if (!st) throw Object.assign(new Error('not_found'), { code: 'not_found' });
+    const s = getSettings();
+    if (s.musicRadios.some((r) => r.uuid === a.uuid || r.url === st.url)) return s;
+    if (s.musicRadios.length >= 50) throw Object.assign(new Error('radio_full'), { code: 'radio_full' });
+    return saveSettings({ musicRadios: cleanRadios([...s.musicRadios, { name: st.name, url: st.url, uuid: a.uuid }]) });
+  });
   handle('music:pickFolder', async () => {
     const dir = await music.pickFolder(win);
     if (!dir) return null;
@@ -950,7 +985,9 @@ if (!app.requestSingleInstanceLock()) {
         }
       },
     });
+    radio = new RadioCatalog();
     music = new Music({
+      catalog: radio,
       config,
       settings: getSettings,
       server: {
@@ -959,6 +996,7 @@ if (!app.requestSingleInstanceLock()) {
       },
     });
     materials = new Materials({ client, notify: send, window: () => win });
+    core = new Core({ client });
     browser = new Browser({
       icon: ICON,
       themeOf: () => ({ theme: getSettings().theme, extra: EXTRA_THEMES }),

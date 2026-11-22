@@ -516,6 +516,12 @@ studio.ai.onEvent((ev) => {
       break;
     case 'done': {
       if (own) AI.messages.push(ev.message);
+      // Core помнит только модель и число токенов, не текст.
+      if (typeof coreCount === 'function' && ev.message) {
+        const model = ev.message.model || (AI.chat && AI.chat.model) || '';
+        if (model) coreCount('models', 1, model);
+        coreCount('tokens', (ev.message.tokensIn || 0) + (ev.message.tokensOut || 0));
+      }
       if (AI.streaming && AI.streaming.chatId === ev.chatId) AI.streaming = null;
       if (ev.quota) {
         const i = AI.models.findIndex((x) => x.model === ev.quota.model);

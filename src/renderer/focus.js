@@ -83,6 +83,10 @@ function focusTick() {
     if (FO.phase === 'work') {
       FO.rounds += 1;
       FO.phase = 'rest';
+      if (typeof coreCount === 'function') {
+        coreCount('focus', 1, 'n');
+        coreCount('focus', FO.work, 'min');
+      }
       FO.end = Date.now() + FO.rest * 60000;
       focusSignal('Перерыв ' + FO.rest + ' минут', 'Встань, разомнись, посмотри вдаль.');
     } else {

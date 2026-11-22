@@ -178,6 +178,11 @@ contextBridge.exposeInMainWorld('studio', {
     review: (id, r) => call('tickets:review', { id, ...r }),
     remove: (id) => call('tickets:delete', { id }),
   },
+  core: {
+    load: (uid) => call('core:load', { uid }),
+    save: (mem) => call('core:save', { mem }),
+    forget: () => call('core:forget'),
+  },
   materials: {
     overview: () => call('mat:overview'),
     files: (project) => call('mat:files', { project }),
@@ -215,5 +220,7 @@ contextBridge.exposeInMainWorld('studio', {
     studio: (force) => call('music:studio', { force }),
     folder: () => call('music:folder'),
     pickFolder: () => call('music:pickFolder'),
+    radioSearch: (q) => call('radio:search', q),
+    radioAdd: (uuid) => call('radio:add', { uuid }),
   },
 });

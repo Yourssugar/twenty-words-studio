@@ -7,6 +7,7 @@
 //                            (сразу играет и одновременно сохраняется в кеш)
 //   twmusic://folder/<n>     файл из выбранной папки (только из неё)
 //   twmusic://radio/<n>      радиостанция из настроек (ссылки .m3u и .pls разбираются)
+//   twmusic://radio/s-<uuid> станция из последнего поиска по каталогу (radio.js)
 //
 // Список студийных треков берётся у GitHub раз в 6 часов и хранится на диске, поэтому
 // скачанные треки играют и без интернета. Кеш не больше 800 МБ: старые треки удаляются.
@@ -31,7 +32,8 @@ const typeOf = (name) => TYPES[path.extname(name).toLowerCase()] || 'audio/mpeg'
 const titleOf = (name) => path.basename(name, path.extname(name)).replace(/(?<!\d)_+|_+(?!\d)/g, ' ').replace(/\s+/g, ' ').trim();
 
 class Music {
-  constructor({ config, settings, server }) {
+  constructor({ config, settings, server, catalog }) {
+    this.catalog = catalog || null; // каталог радиостанций
     this.server = server || null; // { list(), url(id) }: музыка студии из материалов
     const m = (config && config.music) || {};
     this.repo = /^[\w.-]+\/[\w.-]+$/.test(m.repo || '') ? m.repo : 'Yourssugar/twenty-words-studio';
@@ -225,9 +227,10 @@ class Music {
 
   // ---------- радио ----------
 
-  async serveRadio(n) {
-    const st = this.settings().musicRadios[Number(n)];
+  async serveRadio(id) {
+    const st = id.startsWith('s-') ? this.catalog && this.catalog.station(id.slice(2)) : this.settings().musicRadios[Number(id)];
     if (!st) return new Response('not found', { status: 404 });
+    if (this.catalog) this.catalog.click(id.startsWith('s-') ? id.slice(2) : st.uuid);
     let url = st.url;
     // Ссылка на плейлист: берём первый поток из него.
     if (/\.(m3u8?|pls)(\?|$)/i.test(url)) {
@@ -253,7 +256,7 @@ class Music {
         const id = decodeURIComponent(u.pathname.replace(/^\//, ''));
         if (u.hostname === 'studio' && /^([0-9a-f]{40}|r\d{1,15})$/.test(id)) return await this.serveStudio(id, req);
         if (u.hostname === 'folder' && /^\d+$/.test(id)) return await this.serveFolder(id, req);
-        if (u.hostname === 'radio' && /^\d+$/.test(id)) return await this.serveRadio(id);
+        if (u.hostname === 'radio' && /^(\d{1,3}|s-[0-9a-f-]{36})$/.test(id)) return await this.serveRadio(id);
         return new Response('not found', { status: 404 });
       } catch {
         return new Response('error', { status: 502 });
