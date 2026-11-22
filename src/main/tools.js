@@ -111,7 +111,10 @@ class Tools {
   async install(id) {
     const t = this.tool(id);
     if (this.busy.has(id)) throw Object.assign(new Error('busy'), { code: 'busy' });
-    if (!/^https:\/\//.test(this.manifest.base) && !(process.env.TW_TOOLS_BASE && !app.isPackaged)) {
+    // Свой адрес релиза у инструмента, который не менялся с прошлой упаковки (pack-tools.js).
+    const local = process.env.TW_TOOLS_BASE && !app.isPackaged;
+    const base = local ? this.manifest.base : t.base || this.manifest.base;
+    if (!local && !/^https:\/\//.test(base)) {
       throw Object.assign(new Error('no_source'), { code: 'no_source' });
     }
     const ctrl = new AbortController();
@@ -119,7 +122,7 @@ class Tools {
     const tmp = path.join(this.dir, `.${id}.download`);
     try {
       fs.mkdirSync(this.dir, { recursive: true });
-      await this.download(this.manifest.base.replace(/\/$/, '') + '/' + t.file, tmp, t, ctrl.signal);
+      await this.download(base.replace(/\/$/, '') + '/' + t.file, tmp, t, ctrl.signal);
       this.notify('tools:progress', { id, phase: 'unpack' });
       const files = await extractTarGz(tmp, this.forge, t.paths);
       const st = this.readState();

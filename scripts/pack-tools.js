@@ -1,15 +1,18 @@
 #!/usr/bin/env node
-// Упаковка инструментов кузницы с сайта для кнопки «Скачать» в приложении.
+// Упаковка инструментов кузницы с сайта для кнопки "Скачать" в приложении.
 //
 //   node scripts/pack-tools.js <папка forge сайта> [--upload]
 //   пример: node scripts/pack-tools.js "C:\Users\Adronix\A.C.EON.git\forge" --upload
 //
 // Что делает:
 // 1. Собирает пакеты dist-tools/forge-<id>-<версия>.tar.gz из файлов сайта.
-// 2. Записывает data/tools.json: размеры, sha256 и адрес релиза. Этот файл входит
+// 2. Сравнивает с прошлой упаковкой (data/tools.json): инструмент, у которого ни один файл
+//    не поменялся, остаётся со старой версией и старым адресом. Команде не придётся
+//    заново качать то, что не менялось, и "Обновить" появится только у изменённых.
+// 3. Записывает data/tools.json: размеры, sha256 и адреса релизов. Этот файл входит
 //    в приложение, по нему проверяется каждый скачанный пакет.
-// 3. С --upload создаёт релиз tools-<версия> на GitHub и загружает туда пакеты
-//    (нужен GitHub CLI: gh auth login). Токены в файлах не хранятся.
+// 4. С --upload создаёт релиз tools-<версия> на GitHub и загружает туда только изменённые
+//    пакеты (нужен GitHub CLI: gh auth login). Токены в файлах не хранятся.
 //
 // После этого закоммитьте data/tools.json и выпустите новую версию приложения.
 
@@ -100,15 +103,23 @@ if (!src || !fs.existsSync(path.join(src, 'grafika'))) {
 }
 
 const d = new Date();
-const version = `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+const two = (n) => String(n).padStart(2, '0');
+// Дата и время: можно упаковывать несколько раз за день, у каждого релиза свой тег.
+const version = `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}-${two(d.getHours())}${two(d.getMinutes())}`;
 const tag = `tools-${version}`;
+const base = `https://github.com/${owner}/${repo}/releases/download/${tag}`;
 const outDir = path.join(ROOT, 'dist-tools');
 fs.mkdirSync(outDir, { recursive: true });
 
-const manifest = {
-  base: `https://github.com/${owner}/${repo}/releases/download/${tag}`,
-  tools: [],
-};
+let prev = { base: '', tools: [] };
+try {
+  prev = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'tools.json'), 'utf8'));
+} catch {
+  /* первая упаковка */
+}
+
+const manifest = { base, tools: [] };
+const changed = [];
 
 for (const p of PACKAGES) {
   const files = [];
@@ -118,21 +129,34 @@ for (const p of PACKAGES) {
   }
   const unique = [...new Set(files)];
   const gz = tarGz(src, unique);
+  const sha256 = crypto.createHash('sha256').update(gz).digest('hex');
+  const old = prev.tools.find((t) => t.id === p.id);
+  if (old && old.sha256 === sha256 && JSON.stringify(old.paths) === JSON.stringify(p.paths)) {
+    // Не поменялся: тот же пакет, тот же адрес, у команды без обновления.
+    manifest.tools.push({ ...old, name: p.name, desc: p.desc, entry: p.entry, base: old.base || prev.base });
+    console.log(`${p.name.padEnd(9)} без изменений, остаётся ${old.version}`);
+    continue;
+  }
   const file = `forge-${p.id}-${version}.tar.gz`;
   fs.writeFileSync(path.join(outDir, file), gz);
-  const sha256 = crypto.createHash('sha256').update(gz).digest('hex');
-  manifest.tools.push({ id: p.id, name: p.name, desc: p.desc, entry: p.entry, paths: p.paths, version, file, size: gz.length, sha256 });
-  console.log(`${p.name.padEnd(9)} ${String(unique.length).padStart(3)} файлов  ${(gz.length / 1048576).toFixed(1).padStart(5)} МБ  ${file}`);
+  manifest.tools.push({ id: p.id, name: p.name, desc: p.desc, entry: p.entry, paths: p.paths, version, file, size: gz.length, sha256, base });
+  changed.push(path.join(outDir, file));
+  console.log(`${p.name.padEnd(9)} ${String(unique.length).padStart(3)} файлов  ${(gz.length / 1048576).toFixed(1).padStart(5)} МБ  ${file}  ИЗМЕНЁН`);
+}
+
+if (!changed.length) {
+  console.log('\nНи один инструмент не поменялся, обновлять нечего. Сайт точно обновлён (Pull в GitHub Desktop)?');
+  process.exit(0);
 }
 
 fs.writeFileSync(path.join(ROOT, 'data', 'tools.json'), JSON.stringify(manifest, null, 2) + '\n');
 console.log('\ndata/tools.json обновлён.');
 
 if (upload) {
-  const assets = manifest.tools.map((t) => path.join(outDir, t.file));
-  console.log(`\nСоздаю релиз ${tag} в ${owner}/${repo} и загружаю пакеты...`);
-  execFileSync('gh', ['release', 'create', tag, ...assets, '--repo', `${owner}/${repo}`, '--title', `Инструменты ${version}`, '--notes', 'Пакеты инструментов кузницы для Twenty Words Studio. Скачиваются из приложения, вручную ставить не нужно.', '--latest=false'], { stdio: 'inherit' });
+  console.log(`\nСоздаю релиз ${tag} в ${owner}/${repo} и загружаю изменённые пакеты...`);
+  execFileSync('gh', ['release', 'create', tag, ...changed, '--repo', `${owner}/${repo}`, '--title', `Инструменты ${version}`, '--notes', 'Пакеты инструментов кузницы для Twenty Words Studio. Скачиваются из приложения, вручную ставить не нужно.', '--latest=false'], { stdio: 'inherit' });
   console.log('\nГотово. Закоммитьте data/tools.json и выпустите новую версию приложения (npm run release).');
 } else {
   console.log('Пакеты в dist-tools. Чтобы выложить: добавьте --upload.');
+  console.log('Внимание: data/tools.json уже указывает на релиз ' + tag + '. Без --upload приложение не сможет скачать изменённые пакеты.');
 }
