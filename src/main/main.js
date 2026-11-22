@@ -32,7 +32,7 @@ let browser = null;
 let materials = null;
 let core = null;
 let radio = null;
-const MIN_SERVER = '0.9.0'; // сервер, который нужен этой версии приложения
+const MIN_SERVER = '0.9.3'; // сервер, который нужен этой версии приложения
 const names = new Map(); // id -> имя, для текста уведомлений
 const aiStreams = new Map(); // чат ассистента -> AbortController текущего ответа
 let myId = 0;
@@ -583,6 +583,7 @@ function registerIpc() {
     if (Number.isFinite(a.limitGB)) body.limitGB = a.limitGB;
     if (Number.isFinite(a.maxFileGB)) body.maxFileGB = a.maxFileGB;
     if (Number.isSafeInteger(a.musicProject) && a.musicProject >= 0) body.musicProject = a.musicProject;
+    if (typeof a.projectsOpen === 'boolean') body.projectsOpen = a.projectsOpen;
     return client.request('PATCH', '/api/materials/settings', body);
   });
   handle('mat:pick', () => materials.pick());
@@ -600,6 +601,7 @@ function registerIpc() {
     return client.request('PATCH', '/api/materials/files/' + need(a.id), body);
   });
   handle('mat:fileDelete', (a) => client.request('DELETE', '/api/materials/files/' + need(a.id)));
+  handle('mat:move', (a) => client.request('POST', '/api/materials/files/' + need(a.id) + '/move', { project: need(a.project) }, { timeout: 120000 }));
   handle('tickets:add', (a) =>
     client.request('POST', '/api/tickets', {
       title: str(a.title, 200),

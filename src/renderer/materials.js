@@ -1,7 +1,9 @@
 'use strict';
 // Материалы студии: видео, музыка, фото по проектам. Файлы лежат в R2, загрузка и
 // скачивание идут напрямую между компьютером и R2 (главный процесс, materials.js).
-// Проекты создают основатели, загружает любой, удаляет автор файла или основатель.
+// Проекты создают основатели и загружают в них тоже основатели. Общая папка одна на студию:
+// туда каждый сбрасывает своё, основатель переносит нужное в проект ("В проект").
+// В R2: video|img|audio/<проект>/..., общая папка shared/<логин>/... Удаляет автор файла или основатель.
 
 const MT = {
   ov: null, // ответ /api/materials
@@ -30,6 +32,9 @@ const MAT_ERRORS = {
   r2_upload_failed: 'Загрузка в хранилище прервалась. Проверьте интернет и попробуйте ещё раз.',
   r2_download_failed: 'Скачивание прервалось. Попробуйте ещё раз.',
   bad_name: 'Имя не подошло. Расширение файла менять нельзя.',
+  founder_only: 'В проекты студии загружают основатели. Своё можно сбросить в "Общую папку".',
+  shared_project: 'С общей папкой так нельзя: её не удаляют и в неё не переносят.',
+  projects_closed: 'Проекты студии сейчас видят только основатели. Вам доступна общая папка.',
 };
 const matErr = (code) => MAT_ERRORS[code] || errText(code);
 
@@ -72,10 +77,15 @@ function renderMatSide() {
   if (!ov) return;
   if (!ov.projects.length) box.append(h('div', { class: 'side-empty', text: founder ? 'Проектов пока нет. Создайте первый.' : 'Проектов пока нет. Их создают основатели.' }));
   for (const p of ov.projects) {
-    box.append(h('button', { class: 'item mat-item' + (p.id === MT.project ? ' is-on' : ''), onclick: () => openMatProject(p.id) },
+    const count = p.files ? p.files + ' ' + plural(p.files, 'файл', 'файла', 'файлов') + ', ' + fmtBytes(p.bytes) : 'пусто';
+    box.append(h('button', { class: 'item mat-item' + (p.id === MT.project ? ' is-on' : '') + (p.shared ? ' is-shared' : ''), onclick: () => openMatProject(p.id) },
       h('span', { class: 'ticket-main' },
         h('span', { class: 'item-name', text: p.title }),
-        h('span', { class: 'ticket-meta', text: (p.files ? p.files + ' ' + plural(p.files, 'файл', 'файла', 'файлов') + ', ' + fmtBytes(p.bytes) : 'пусто') + (p.id === ov.musicProject ? ' · музыка студии' : '') }))));
+        h('span', { class: 'ticket-meta', text: (p.shared ? 'сюда может каждый · ' : '') + count + (p.id === ov.musicProject ? ' · музыка студии' : '') }))));
+    if (p.shared && ov.projects.length > 1) box.append(h('div', { class: 'mat-sep muted small', text: 'Проекты студии' }));
+  }
+  if (ov.projectsOpen === false && !founder && !(S.me && S.me.role === 'admin')) {
+    box.append(h('div', { class: 'side-empty', text: 'Проекты студии пока видят только основатели.' }));
   }
   const used = $('mat-usage');
   used.innerHTML = '';
@@ -123,8 +133,13 @@ function renderMatMain() {
   }
   $('mat-title').textContent = p.title;
   $('mat-sub').textContent = p.note || (p.id === ov.musicProject ? 'аудио отсюда играет плеер как "Музыка студии"' : '');
-  tools.append(h('button', { class: 'btn btn-s btn-accent', type: 'button', text: 'Загрузить', onclick: matPick }));
-  if (founder) {
+  const canUpload = founder || p.shared;
+  if (canUpload) tools.append(h('button', { class: 'btn btn-s btn-accent', type: 'button', text: 'Загрузить', onclick: matPick }));
+  if (founder && p.shared) {
+    tools.append(
+      h('button', { class: 'btn btn-s', type: 'button', text: 'Скачать всё', title: 'Все файлы общей папки в папку на компьютере', onclick: () => matDownloadProject(p) }),
+      h('button', { class: 'btn btn-s', type: 'button', text: 'Изменить', onclick: () => matProjectForm(p) }));
+  } else if (founder) {
     const isMusic = p.id === ov.musicProject;
     tools.append(
       h('button', { class: 'btn btn-s', type: 'button', text: 'Скачать проект', title: 'Все файлы проекта в папку на компьютере или внешнем диске', onclick: () => matDownloadProject(p) }),
@@ -151,14 +166,19 @@ function renderMatMain() {
   body.append(bar);
 
   const zone = h('div', { class: 'mat-zone' });
-  bindMatDrop(zone);
+  if (canUpload) bindMatDrop(zone);
+  const shared = ov.projects.find((x) => x.shared);
+  if (!canUpload) {
+    body.append(h('div', { class: 'mat-note muted small' }, 'В проекты студии загружают основатели. Своё сбрасывайте в общую папку: ',
+      shared ? h('button', { class: 'b-link', type: 'button', text: 'открыть "' + shared.title + '"', onclick: () => openMatProject(shared.id) }) : 'она первая в списке слева', '.'));
+  }
   if (!all) {
     zone.append(skeleton('lines', 5));
   } else {
     const list = all.filter((f) => (MT.kind === 'all' || f.kind === MT.kind) && (!MT.folder || f.folder === MT.folder));
     if (!list.length) {
       zone.append(h('div', { class: 'mat-empty' },
-        h('div', { text: all.length ? 'Под этот фильтр файлов нет.' : 'Перетащите сюда файлы из проводника или нажмите "Загрузить".' }),
+        h('div', { text: all.length ? 'Под этот фильтр файлов нет.' : canUpload ? 'Перетащите сюда файлы из проводника или нажмите "Загрузить".' : 'Здесь пока пусто.' }),
         h('div', { class: 'muted small', text: 'Видео mp4, mov, webm, mkv; музыка mp3, wav, flac, ogg, m4a; фото png, jpg, webp, gif. До ' + fmtBytes(ov.maxFile) + ' за файл.' })));
     }
     let cur = null;
@@ -177,6 +197,7 @@ function matRow(f) {
   const u = S.users.get(f.by);
   const mine = f.by === S.me.id;
   const can = mine || S.me.founder;
+  const fromShared = S.me.founder && MT.ov.projects.some((p) => p.shared && p.id === f.project) && MT.ov.projects.some((p) => !p.shared);
   return h('div', { class: 'mat-row' },
     matIco(f.kind),
     h('div', { class: 'mat-name' },
@@ -185,6 +206,7 @@ function matRow(f) {
     h('div', { class: 'row gap-s' },
       h('button', { class: 'btn btn-s', type: 'button', text: f.kind === 'audio' ? 'Слушать' : 'Смотреть', onclick: () => matPreview(f) }),
       h('button', { class: 'btn btn-s', type: 'button', text: 'Скачать', onclick: () => matDownload(f) }),
+      fromShared ? h('button', { class: 'btn btn-s btn-accent', type: 'button', text: 'В проект', title: 'Перенести в проект студии', onclick: () => matMove(f) }) : null,
       can ? h('button', { class: 'btn btn-s', type: 'button', text: 'Изменить', onclick: () => matEdit(f) }) : null,
       can ? h('button', { class: 'btn btn-s btn-danger-ghost', type: 'button', text: 'Удалить', onclick: () => matDelete(f) }) : null));
 }
@@ -226,6 +248,11 @@ async function matPick() {
 function matEnqueue(list) {
   if (!list.length || !MT.project) return;
   const ov = MT.ov;
+  const p = ov.projects.find((x) => x.id === MT.project);
+  if (!p || !(p.shared || S.me.founder)) {
+    toast(matErr('founder_only'));
+    return;
+  }
   for (const f of list) {
     const ext = (f.name.split('.').pop() || '').toLowerCase();
     const ok = Object.values(ov.types || {}).some((x) => x.includes(ext));
@@ -397,6 +424,30 @@ async function matEdit(f) {
   }
 }
 
+// Из общей папки в проект: файл переезжает в R2 в video|img|audio/<проект>/.
+async function matMove(f) {
+  const targets = MT.ov.projects.filter((p) => !p.shared && p.id !== f.project);
+  if (!targets.length) return;
+  const sel = h('select', {}, ...targets.map((p) => h('option', { value: String(p.id), text: p.title })));
+  const box = h('div', { class: 'col gap-s' },
+    h('div', { class: 'muted small', text: 'Файл "' + f.name + '" переедет в выбранный проект и пропадёт из общей папки.' }),
+    h('label', { class: 'field' }, h('span', { text: 'Проект' }), sel));
+  if (!(await modal({ title: 'Перенести в проект', body: box, ok: 'Перенести' }))) return;
+  const to = Number(sel.value);
+  try {
+    await call(studio.materials.move(f.id, to));
+    MT.files.delete(f.project);
+    MT.files.delete(to);
+    MT.ov = await call(studio.materials.overview());
+    await loadMatFiles(true);
+    renderMatSide();
+    renderMatMain();
+    toast('Перенесено в "' + targets.find((p) => p.id === to).title + '".');
+  } catch (err) {
+    toast(matErr(err.code));
+  }
+}
+
 async function matDelete(f) {
   if (!(await modal({ title: 'Удалить "' + f.name + '"?', body: 'Файл удалится из хранилища. Вернуть не получится.', ok: 'Удалить', danger: true }))) return;
   try {
@@ -499,5 +550,6 @@ async function matLimits() {
 // Кто-то загрузил, удалил или переименовал: обновить, если раздел открыт.
 function onMaterialsEvent(ev) {
   if (ev.project) MT.files.delete(ev.project);
+  else MT.files.clear(); // поменялись настройки: доступ к проектам мог закрыться
   if (S.view === 'materials') openMaterials();
 }

@@ -846,6 +846,10 @@ html.focus-mode .view-chat .side { display: none; }
 .storage-table td.num:last-child { color: var(--text); }
 
 /* ---------- материалы ---------- */
+.mat-item.is-shared { border: 1px dashed var(--accent-edge); }
+.mat-item.is-shared .item-name { color: var(--accent); }
+.mat-sep { padding: 10px 8px 4px; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
+.mat-note { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); margin: 12px 22px 0; }
 .mat-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .mat-filters { padding: 12px 22px 0; }
 .mat-filters .seg { margin-bottom: 0; }

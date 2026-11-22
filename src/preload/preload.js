@@ -204,6 +204,7 @@ contextBridge.exposeInMainWorld('studio', {
     showFile: (file) => call('mat:showFile', { file }),
     edit: (id, patch) => call('mat:fileEdit', { id, ...patch }),
     remove: (id) => call('mat:fileDelete', { id }),
+    move: (id, project) => call('mat:move', { id, project }),
     onProgress: on('mat:progress'),
   },
   browser: {

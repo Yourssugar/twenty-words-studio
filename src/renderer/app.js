@@ -895,6 +895,7 @@ async function loadAdmin() {
     if (typeof loadAdminAI === 'function') loadAdminAI();
     if (typeof loadAdminRules === 'function') loadAdminRules();
     if (S.me.founder) loadStorage();
+    if (S.me.founder) loadMatAccess();
   } catch (err) {
     toast(errText(err.code));
   }
@@ -942,6 +943,37 @@ async function loadStorage() {
   }
 }
 $('storage-refresh').addEventListener('click', loadStorage);
+
+// Материалы: открыты ли проекты студии участникам или только общая папка.
+// Основатели и админы видят всё всегда; музыка студии в плеере играет у всех.
+async function loadMatAccess() {
+  const card = $('mat-access-card');
+  try {
+    const ov = await call(studio.materials.overview());
+    if (!ov.enabled) {
+      card.hidden = true;
+      return;
+    }
+    card.hidden = false;
+    const open = ov.projectsOpen !== false;
+    $('mat-access-open').checked = open;
+    $('mat-access-note').textContent = open
+      ? 'Сейчас участники видят все проекты и могут скачать любой файл. Снимите галочку, если в команде есть новые люди, которым пока рано.'
+      : 'Сейчас участники видят только общую папку. Основатели и админы видят всё. Музыка студии в плеере играет у всех.';
+  } catch {
+    card.hidden = true;
+  }
+}
+$('mat-access-open').addEventListener('change', async (e) => {
+  try {
+    await call(studio.materials.settings({ projectsOpen: e.target.checked }));
+    toast(e.target.checked ? 'Проекты студии открыты участникам.' : 'Участники теперь видят только общую папку.');
+  } catch (err) {
+    e.target.checked = !e.target.checked;
+    toast(errText(err.code));
+  }
+  loadMatAccess();
+});
 
 function showCode(label, code) {
   $('code-label').textContent = label;
