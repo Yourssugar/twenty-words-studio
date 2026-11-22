@@ -7,7 +7,7 @@
 // Открываются в отдельном окне по адресу twtool://forge/<папка>/ в своей сессии:
 // у окна нет доступа ни к токену студии, ни к Node.
 
-const { app, BrowserWindow, protocol, session, shell } = require('electron');
+const { app, BrowserWindow, dialog, protocol, session, shell } = require('electron');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -49,7 +49,9 @@ function registerScheme(extra = []) {
 }
 
 class Tools {
-  constructor({ root, notify, onWindow }) {
+  constructor({ root, notify, onWindow, perms }) {
+    this.perms = perms || { get: () => ({}), set: () => {} }; // решения о камере и микрофоне
+    this.asking = Promise.resolve(); // вопросы о доступе по одному
     this.root = root; // папка приложения
     this.onWindow = onWindow || (() => {}); // окно открыто: развернуть по настройке, F11
     this.notify = notify; // (канал, данные) -> интерфейс
@@ -200,9 +202,68 @@ class Tools {
 
   setupSession() {
     const ses = session.fromPartition(PARTITION);
-    ses.setPermissionRequestHandler((_wc, perm, cb) => cb(perm === 'clipboard-sanitized-write'));
+    // Буфер обмена и полный экран можно всегда. Камеру и микрофон инструмент просит,
+    // человек отвечает в окне вопроса и может запомнить ответ (сбросить: Профиль, "Камера и микрофон").
+    ses.setPermissionRequestHandler((wc, perm, cb, details) => {
+      if (perm === 'clipboard-sanitized-write' || perm === 'fullscreen') return cb(true);
+      if (perm === 'media') {
+        this.askMedia(wc, details).then(cb, () => cb(false));
+        return;
+      }
+      cb(false);
+    });
+    ses.setPermissionCheckHandler((wc, perm, _origin, details) => {
+      if (perm === 'clipboard-sanitized-write' || perm === 'fullscreen') return true;
+      if (perm !== 'media') return false;
+      const p = this.perms.get()[this.toolOf(wc)] || {};
+      const t = details && details.mediaType;
+      if (t === 'video') return p.cam === 'allow';
+      if (t === 'audio') return p.mic === 'allow';
+      return p.mic === 'allow' || p.cam === 'allow';
+    });
     ses.protocol.handle(SCHEME, (req) => this.serve(req));
     return ses;
+  }
+
+  toolOf(wc) {
+    for (const [id, w] of this.windows) if (!w.isDestroyed() && w.webContents === wc) return id;
+    return null;
+  }
+
+  // Камера и микрофон: запомненное решение или вопрос человеку.
+  askMedia(wc, details) {
+    const id = this.toolOf(wc);
+    if (!id) return Promise.resolve(false);
+    const types = (details && details.mediaTypes) || [];
+    const kinds = [...new Set(types.map((t) => (t === 'video' ? 'cam' : t === 'audio' ? 'mic' : null)).filter(Boolean))];
+    if (!kinds.length) return Promise.resolve(false);
+    const run = async () => {
+      const saved = this.perms.get()[id] || {};
+      if (kinds.some((k) => saved[k] === 'deny')) return false;
+      const left = kinds.filter((k) => saved[k] !== 'allow');
+      if (!left.length) return true;
+      const w = this.windows.get(id);
+      const what = left.length === 2 ? 'камере и микрофону' : left[0] === 'cam' ? 'камере' : 'микрофону';
+      const name = (this.manifest.tools.find((x) => x.id === id) || {}).name || id;
+      const r = await dialog.showMessageBox(w && !w.isDestroyed() ? w : null, {
+        type: 'question',
+        buttons: ['Разрешить', 'Не разрешать'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+        title: name,
+        message: '"' + name + '" просит доступ к ' + what,
+        detail: 'Изменить решение можно в Профиле, раздел "Камера и микрофон".',
+        checkboxLabel: 'Запомнить для этого инструмента',
+        checkboxChecked: true,
+      });
+      const ok = r.response === 0;
+      if (r.checkboxChecked) this.perms.set(id, Object.fromEntries(left.map((k) => [k, ok ? 'allow' : 'deny'])));
+      return ok;
+    };
+    const p = this.asking.then(run, run);
+    this.asking = p.catch(() => {});
+    return p;
   }
 
   async serve(req) {

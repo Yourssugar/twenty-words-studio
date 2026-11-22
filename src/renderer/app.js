@@ -121,7 +121,7 @@ function modal({ title, body, ok = 'Да', danger = false, wide = false }) {
       resolve(v);
     };
     const onKey = (e) => {
-      if (e.key === 'Escape') done(false);
+      if (e.key === 'Escape' && !document.fullscreenElement) done(false); // Esc в полноэкранном видео только выходит из полного экрана
     };
     document.addEventListener('keydown', onKey);
     okBtn.onclick = () => done(true);

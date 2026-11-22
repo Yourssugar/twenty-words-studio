@@ -176,6 +176,7 @@ async function renderLookSettings(s) {
       segOf([['window', 'Окном'], ['maximized', 'Развёрнутыми'], ['fullscreen', 'Во весь экран']], s.editorsMode, (v) => saveLook({ editorsMode: v }))),
     h('p', { class: 'muted small', text: 'F11 в любом окне студии: во весь экран и обратно. Размер и положение главного окна запоминаются.' }),
     checkOf('Ссылки из чата открывать во встроенном браузере (иначе в браузере Windows)', s.linksInBrowser, (v) => saveLook({ linksInBrowser: v })),
+    toolPermsBlock(s),
     checkOf('Мощная видеокарта, если в компьютере их две (ноутбуки с NVIDIA или AMD)', s.gpuHigh, (v) => saveLook({ gpuHigh: v })),
     checkOf('Аппаратное ускорение (выключать, только если окна мигают или рисуются с ошибками)', s.gpuAccel, (v) => saveLook({ gpuAccel: v })),
     gpuLine,
@@ -192,6 +193,41 @@ async function renderLookSettings(s) {
   } catch {
     gpuLine.textContent = '';
   }
+}
+
+// Камера и микрофон в инструментах: инструмент спрашивает сам, здесь видно и меняется, что решили.
+function toolPermsBlock(s) {
+  const box = h('div', { class: 'field' }, h('span', { text: 'Камера и микрофон в инструментах' }));
+  const names = {};
+  const known = { grafika: 'Графика', zvuk: 'Звук', montazh: 'Монтаж', pages: 'Страницы', fony: 'Фоны' };
+  for (const t of (typeof T !== 'undefined' && Array.isArray(T.list) && T.list) || []) names[t.id] = t.name;
+  for (const [id, n] of Object.entries(known)) names[id] = names[id] || n;
+  const word = { mic: 'микрофон', cam: 'камера' };
+  const rows = [];
+  for (const [id, p] of Object.entries(s.toolPerms || {})) {
+    for (const k of ['mic', 'cam']) {
+      if (!p[k]) continue;
+      rows.push(h('div', { class: 'row gap-s perm-row' },
+        h('span', { text: (names[id] || id) + ': ' + word[k] }),
+        segOf(k === 'cam' ? [['allow', 'Разрешена'], ['deny', 'Запрещена']] : [['allow', 'Разрешён'], ['deny', 'Запрещён']], p[k], (v) => {
+          const all = { ...s.toolPerms, [id]: { ...p, [k]: v } };
+          s.toolPerms = all;
+          saveLook({ toolPerms: all });
+        }),
+        h('button', { class: 'btn btn-s', type: 'button', text: 'Спрашивать снова', onclick: async () => {
+          const all = { ...s.toolPerms, [id]: { ...p } };
+          delete all[id][k];
+          if (!Object.keys(all[id]).length) delete all[id];
+          await saveLook({ toolPerms: all });
+          renderLookSettings();
+        } })));
+    }
+  }
+  box.append(rows.length
+    ? h('div', { class: 'col gap-s' }, ...rows)
+    : h('p', { class: 'muted small', text: 'Пока ни один инструмент не просил. Когда понадобится, например для записи в Звуке, инструмент спросит, и ответ можно запомнить.' }));
+  box.append(h('p', { class: 'muted small', text: 'Если разрешили, а звук или картинка не идут: в Windows откройте Параметры, Конфиденциальность, Микрофон (или Камера) и включите доступ для классических приложений.' }));
+  return box;
 }
 
 async function initLook(s) {

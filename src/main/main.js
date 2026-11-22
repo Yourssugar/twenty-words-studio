@@ -112,6 +112,10 @@ const LOOK = {
   linksInBrowser: [isBool, true], // ссылки из чата: во встроенном браузере или в системном
   gpuHigh: [isBool, true], // мощная видеокарта, если их две
   gpuAccel: [isBool, true], // аппаратное ускорение (выключать только при сбоях)
+  // Камера и микрофон для инструментов: { grafika: { mic: 'allow', cam: 'deny' } }, решения человека
+  toolPerms: [(x) => !!x && typeof x === 'object' && !Array.isArray(x) && Object.keys(x).length <= 40 &&
+    Object.entries(x).every(([id, v]) => /^[a-z0-9-]{1,32}$/.test(id) && v && typeof v === 'object' &&
+      Object.entries(v).every(([k, d]) => ['mic', 'cam'].includes(k) && ['allow', 'deny'].includes(d))), {}],
 };
 const cleanRadios = (v) =>
   (Array.isArray(v) ? v : [])
@@ -972,9 +976,22 @@ if (!app.requestSingleInstanceLock()) {
     app.setAppUserModelId('studio.twentywords.studio');
     Menu.setApplicationMenu(null);
     // Интерфейсу не нужны камера, микрофон, геопозиция и прочие разрешения браузера.
-    session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+    // Только полный экран: видео в Материалах и картинки разворачиваются на весь экран.
+    session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => cb(perm === 'fullscreen'));
     setupClient();
-    tools = new Tools({ root: ROOT, notify: send, onWindow: applyEditorsMode });
+    tools = new Tools({
+      root: ROOT,
+      notify: send,
+      onWindow: applyEditorsMode,
+      perms: {
+        get: () => getSettings().toolPerms,
+        set: (id, patch) => {
+          const all = { ...getSettings().toolPerms };
+          all[id] = { ...(all[id] || {}), ...patch };
+          saveSettings({ toolPerms: all });
+        },
+      },
+    });
     tools.setupSession();
     runner = new Runner({
       notify: send,
