@@ -21,6 +21,7 @@ const CR = {
   card: null,
   hideTimer: 0,
   meetAsked: false,
+  starting: false,
 };
 
 const CORE_VIEWS = { home: 'Главная', chat: 'Чат', projects: 'Проекты', assistant: 'Ассистент', contrib: 'Вклад', materials: 'Материалы', bugs: 'Баги', tools: 'Инструменты' };
@@ -56,13 +57,20 @@ const fmtDays = (n) => n + ' ' + plural(n, 'день', 'дня', 'дней');
 
 // ---------- память ----------
 
+// Запускается после входа и ещё раз, когда сервер прислал "ready" с данными человека:
+// через туннель "ready" приходит позже, чем открывается главная.
 async function coreStart() {
-  if (!S.me) return;
+  if (!S.me || CR.mem || CR.starting) return;
+  CR.starting = true;
+  let mem = {};
   try {
-    CR.mem = (await call(studio.core.load(S.me.id))) || {};
+    mem = (await call(studio.core.load(S.me.id))) || {};
   } catch {
-    CR.mem = {};
+    /* память не загрузилась: начинаем с пустой */
   }
+  CR.starting = false;
+  if (!S.me) return; // пока грузилось, вышли из аккаунта
+  CR.mem = mem;
   const m = CR.mem;
   const now = Date.now();
   CR.prevLast = m.lastAt || 0;
@@ -89,7 +97,8 @@ async function coreStart() {
   }
   m.lastAt = now;
   CR.dirty = true;
-  CR.nextAt = now + (CR.fresh ? 4000 : coreRnd(4, 6) * 60e3);
+  // Новый заход или ещё не познакомились: почти сразу. Перезапуск посреди работы: через 4-6 минут.
+  CR.nextAt = now + (CR.fresh || !(m.me && m.me.name) ? 4000 : coreRnd(4, 6) * 60e3);
   coreSave();
 }
 
@@ -446,6 +455,7 @@ function showMeet() {
   const save = () => {
     const n = name.value.replace(/\s+/g, ' ').trim().slice(0, 30);
     if (!n) return name.focus();
+    if (!CR.mem) CR.mem = {};
     CR.mem.me = { name: n, gender };
     CR.mem.met = Date.now();
     CR.dirty = true;

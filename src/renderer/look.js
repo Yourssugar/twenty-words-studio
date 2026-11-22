@@ -122,7 +122,12 @@ async function saveLook(patch) {
 
 function segOf(items, current, onPick) {
   return h('div', { class: 'seg seg-inline' }, ...items.map(([v, t]) => h('button', {
-    class: 'seg-btn' + (v === current ? ' is-on' : ''), type: 'button', text: t, onclick: () => onPick(v),
+    class: 'seg-btn' + (v === current ? ' is-on' : ''), type: 'button', text: t,
+    onclick: (e) => {
+      // Нажатая кнопка подсвечивается сразу, не дожидаясь перерисовки всего блока.
+      for (const b of e.currentTarget.parentNode.children) b.classList.toggle('is-on', b === e.currentTarget);
+      onPick(v);
+    },
   })));
 }
 

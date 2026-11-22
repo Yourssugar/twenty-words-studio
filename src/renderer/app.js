@@ -402,6 +402,7 @@ studio.chat.onEvent((ev) => {
       S.more.clear();
       $('rail-admin').hidden = S.me.role !== 'admin';
       renderMeBadge();
+      if (typeof coreStart === 'function') coreStart(); // Юна ждала, пока станет известно, кто вошёл
       if (!S.rooms.has(S.room) && !S.room.startsWith('dm:')) S.room = 'work';
       openRoom(S.room);
       if (S.view === 'admin') loadAdmin();
