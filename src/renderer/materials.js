@@ -34,7 +34,9 @@ const MAT_ERRORS = {
   bad_name: 'Имя не подошло. Расширение файла менять нельзя.',
   founder_only: 'В проекты студии загружают основатели. Своё можно сбросить в "Общую папку".',
   shared_project: 'С общей папкой так нельзя: её не удаляют и в неё не переносят.',
-  projects_closed: 'Проекты студии сейчас видят только основатели. Вам доступна общая папка.',
+  projects_closed: 'Проекты студии вам пока закрыты. Доступна общая папка.',
+  forbidden: 'Это может только тот, кто создал папку, или основатель.',
+  too_many: 'Слишком много папок.',
 };
 const matErr = (code) => MAT_ERRORS[code] || errText(code);
 
@@ -84,8 +86,8 @@ function renderMatSide() {
         h('span', { class: 'ticket-meta', text: (p.shared ? 'сюда может каждый · ' : '') + count + (p.id === ov.musicProject ? ' · музыка студии' : '') }))));
     if (p.shared && ov.projects.length > 1) box.append(h('div', { class: 'mat-sep muted small', text: 'Проекты студии' }));
   }
-  if (ov.projectsOpen === false && !founder && !(S.me && S.me.role === 'admin')) {
-    box.append(h('div', { class: 'side-empty', text: 'Проекты студии пока видят только основатели.' }));
+  if (ov.projectsOpen === false) {
+    box.append(h('div', { class: 'side-empty', text: 'Проекты студии вам пока закрыты. Открыть доступ может основатель.' }));
   }
   const used = $('mat-usage');
   used.innerHTML = '';
@@ -149,13 +151,19 @@ function renderMatMain() {
   }
 
   const all = MT.files.get(p.id);
-  const folders = [...new Set((all || []).map((f) => f.folder).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru'));
+  const folders = matFolders(p, all);
+  const curFolder = (p.folders || []).find((x) => x.name === MT.folder);
+  const lockedHere = !!(curFolder && curFolder.locked && !founder);
+  if (p.shared) {
+    $('mat-sub').textContent = MT.folder ? p.title + ' / ' + MT.folder : p.note || '';
+    body.append(matFolderBar(p, all, folders));
+  }
   const bar = h('div', { class: 'row wrap gap-s mat-filters' },
     segOf(MAT_KINDS, MT.kind, (v) => {
       MT.kind = v;
       renderMatMain();
     }));
-  if (folders.length) {
+  if (folders.length && !p.shared) {
     const sel = h('select', { title: 'Папка' }, h('option', { value: '', text: 'Все папки' }), ...folders.map((f) => h('option', { value: f, text: f, selected: f === MT.folder })));
     sel.addEventListener('change', () => {
       MT.folder = sel.value;
@@ -166,7 +174,12 @@ function renderMatMain() {
   body.append(bar);
 
   const zone = h('div', { class: 'mat-zone' });
-  if (canUpload) bindMatDrop(zone);
+  if (canUpload && !lockedHere) bindMatDrop(zone);
+  if (lockedHere) {
+    body.append(h('div', { class: 'mat-note muted small', text: 'В "' + MT.folder + '" кладут основатели. Смотреть и скачивать можно, а своё загружайте в свою папку.' }));
+    const up = tools.querySelector('.btn-accent');
+    if (up) up.disabled = true;
+  }
   const shared = ov.projects.find((x) => x.shared);
   if (!canUpload) {
     body.append(h('div', { class: 'mat-note muted small' }, 'В проекты студии загружают основатели. Своё сбрасывайте в общую папку: ',
@@ -183,7 +196,7 @@ function renderMatMain() {
     }
     let cur = null;
     for (const f of list) {
-      if (f.folder !== cur) {
+      if (!(p.shared && MT.folder) && f.folder !== cur) {
         cur = f.folder;
         zone.append(h('div', { class: 'mat-folder muted small', text: f.folder || 'Без папки' }));
       }
@@ -193,11 +206,72 @@ function renderMatMain() {
   body.append(zone, matQueueBox());
 }
 
+// Папки проекта: заведённые (в том числе пустые) и те, что есть у файлов. Сначала папки основателей.
+function matFolders(p, all) {
+  const out = (p.folders || []).map((x) => x.name);
+  for (const f of all || []) if (f.folder && !out.some((n) => n.toLowerCase() === f.folder.toLowerCase())) out.push(f.folder);
+  const locked = new Set((p.folders || []).filter((x) => x.locked).map((x) => x.name));
+  return out.sort((a, b) => (locked.has(b) - locked.has(a)) || a.localeCompare(b, 'ru'));
+}
+
+// Папки общей папки плитками: "Все файлы", папки с числом файлов, "+ Папка".
+function matFolderBar(p, all, folders) {
+  const count = (name) => (all || []).filter((f) => (name ? f.folder === name : true)).length;
+  const meta = (name) => (p.folders || []).find((x) => x.name === name);
+  const tile = (name, label) => {
+    const m = meta(name);
+    const n = all ? count(name) : 0;
+    const canDel = name && m && !n && (S.me.founder || (m.by === S.me.id && !m.locked));
+    return h('div', { class: 'mat-ftile' + (MT.folder === name ? ' is-on' : '') + (m && m.locked ? ' is-locked' : '') },
+      h('button', { class: 'mat-ftile-main', type: 'button', title: m && m.locked ? 'Сюда кладут основатели, видят все' : '', onclick: () => {
+        MT.folder = name;
+        renderMatMain();
+      } },
+      h('span', { class: 'mat-ftile-name', text: label || name }),
+      h('span', { class: 'muted small', text: (m && m.locked ? 'от основателей · ' : '') + (all ? n + ' ' + plural(n, 'файл', 'файла', 'файлов') : '') })),
+      canDel ? h('button', { class: 'mat-ftile-x', type: 'button', title: 'Удалить пустую папку', text: '×', onclick: () => matFolderDelete(p, name) }) : null);
+  };
+  return h('div', { class: 'mat-fbar' },
+    tile('', 'Все файлы'),
+    ...folders.map((name) => tile(name)),
+    h('button', { class: 'mat-ftile mat-ftile-add', type: 'button', text: '+ Папка', onclick: () => matFolderAdd(p) }));
+}
+
+async function matFolderAdd(p) {
+  const name = h('input', { maxlength: '60', placeholder: 'Например: Дима, звуки для игры' });
+  const box = h('div', { class: 'col gap-s' },
+    h('label', { class: 'field' }, h('span', { text: 'Название папки' }), name),
+    h('div', { class: 'muted small', text: 'Папка видна всем, кто видит общую папку. Удалить её можно, пока она пустая.' }));
+  setTimeout(() => name.focus(), 50);
+  if (!(await modal({ title: 'Новая папка', body: box, ok: 'Создать' })) || !name.value.trim()) return;
+  try {
+    const r = await call(studio.materials.folderAdd(p.id, name.value.trim()));
+    MT.ov = await call(studio.materials.overview());
+    MT.folder = r.name;
+    renderMatSide();
+    renderMatMain();
+  } catch (err) {
+    toast(matErr(err.code));
+  }
+}
+
+async function matFolderDelete(p, name) {
+  try {
+    await call(studio.materials.folderDelete(p.id, name));
+    MT.ov = await call(studio.materials.overview());
+    if (MT.folder === name) MT.folder = '';
+    renderMatMain();
+  } catch (err) {
+    toast(matErr(err.code));
+  }
+}
+
 function matRow(f) {
   const u = S.users.get(f.by);
   const mine = f.by === S.me.id;
   const can = mine || S.me.founder;
   const fromShared = S.me.founder && MT.ov.projects.some((p) => p.shared && p.id === f.project) && MT.ov.projects.some((p) => !p.shared);
+  const toShared = S.me.founder && !fromShared && MT.ov.projects.some((p) => p.shared);
   return h('div', { class: 'mat-row' },
     matIco(f.kind),
     h('div', { class: 'mat-name' },
@@ -207,6 +281,7 @@ function matRow(f) {
       h('button', { class: 'btn btn-s', type: 'button', text: f.kind === 'audio' ? 'Слушать' : 'Смотреть', onclick: () => matPreview(f) }),
       h('button', { class: 'btn btn-s', type: 'button', text: 'Скачать', onclick: () => matDownload(f) }),
       fromShared ? h('button', { class: 'btn btn-s btn-accent', type: 'button', text: 'В проект', title: 'Перенести в проект студии', onclick: () => matMove(f) }) : null,
+      toShared ? h('button', { class: 'btn btn-s', type: 'button', text: 'В общую', title: 'Переложить в общую папку, например в "Материалы студии": увидят все', onclick: () => matMoveToShared(f) }) : null,
       can ? h('button', { class: 'btn btn-s', type: 'button', text: 'Изменить', onclick: () => matEdit(f) }) : null,
       can ? h('button', { class: 'btn btn-s btn-danger-ghost', type: 'button', text: 'Удалить', onclick: () => matDelete(f) }) : null));
 }
@@ -410,10 +485,14 @@ async function matDownload(f) {
 
 async function matEdit(f) {
   const name = h('input', { maxlength: '160', value: f.name });
-  const folder = h('input', { maxlength: '60', value: f.folder || '', placeholder: 'Например: Трейлер, Обложки, Черновики' });
+  const p = MT.ov.projects.find((x) => x.id === f.project) || {};
+  const names = matFolders(p, MT.files.get(f.project)).filter((n) => S.me.founder || !((p.folders || []).find((x) => x.name === n && x.locked)));
+  const listId = 'mat-folders-' + f.id;
+  const folder = h('input', { maxlength: '60', value: f.folder || '', placeholder: 'Например: Трейлер, Обложки, Черновики', list: listId });
   const box = h('div', { class: 'col gap-s' },
     h('label', { class: 'field' }, h('span', { text: 'Имя (расширение не меняется)' }), name),
-    h('label', { class: 'field' }, h('span', { text: 'Папка' }), folder));
+    h('label', { class: 'field' }, h('span', { text: 'Папка (выберите из списка или впишите новую, пусто: без папки)' }), folder),
+    h('datalist', { id: listId }, ...names.map((n) => h('option', { value: n }))));
   if (!(await modal({ title: 'Файл', body: box, ok: 'Сохранить' }))) return;
   try {
     await call(studio.materials.edit(f.id, { name: name.value.trim(), folder: folder.value.trim() }));
@@ -443,6 +522,30 @@ async function matMove(f) {
     renderMatSide();
     renderMatMain();
     toast('Перенесено в "' + targets.find((p) => p.id === to).title + '".');
+  } catch (err) {
+    toast(matErr(err.code));
+  }
+}
+
+// Из проекта студии в общую папку (обычно в "Материалы студии"): в R2 файл остаётся на месте.
+async function matMoveToShared(f) {
+  const shared = MT.ov.projects.find((p) => p.shared);
+  if (!shared) return;
+  const names = matFolders(shared, MT.files.get(shared.id));
+  const sel = h('select', {}, ...names.map((n) => h('option', { value: n, text: n })));
+  const box = h('div', { class: 'col gap-s' },
+    h('div', { class: 'muted small', text: 'Файл "' + f.name + '" переедет в "' + shared.title + '" и станет виден всей команде, даже тем, кому проекты студии закрыты.' }),
+    h('label', { class: 'field' }, h('span', { text: 'Папка' }), sel));
+  if (!(await modal({ title: 'Переложить в общую папку', body: box, ok: 'Переложить' }))) return;
+  try {
+    await call(studio.materials.move(f.id, shared.id, sel.value));
+    MT.files.delete(f.project);
+    MT.files.delete(shared.id);
+    MT.ov = await call(studio.materials.overview());
+    await loadMatFiles(true);
+    renderMatSide();
+    renderMatMain();
+    toast('Переложено в "' + shared.title + ' / ' + sel.value + '".');
   } catch (err) {
     toast(matErr(err.code));
   }

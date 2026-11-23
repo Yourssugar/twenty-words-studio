@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld('studio', {
     aiEditSkill: (id, skill) => call('admin:aiEditSkill', { id, ...skill }),
     aiDeleteSkill: (id) => call('admin:aiDeleteSkill', { id }),
     aiModel: (name, ctx, effort) => call('admin:aiModel', { name, ctx, effort }),
+    matAccess: (id, open) => call('admin:matAccess', { id, open }),
     rules: () => call('admin:rules'),
     rulesDraft: (body, changes) => call('admin:rulesDraft', { body, changes }),
     rulesPublish: () => call('admin:rulesPublish'),
@@ -149,6 +150,7 @@ contextBridge.exposeInMainWorld('studio', {
     set: (patch) => call('settings:set', patch),
   },
   app: {
+    legal: (doc) => call('app:legal', { doc }),
     info: () => call('app:info'),
     copy: (text) => call('app:copy', { text }),
     notify: (title, body) => call('app:notify', { title, body }),
@@ -204,7 +206,9 @@ contextBridge.exposeInMainWorld('studio', {
     showFile: (file) => call('mat:showFile', { file }),
     edit: (id, patch) => call('mat:fileEdit', { id, ...patch }),
     remove: (id) => call('mat:fileDelete', { id }),
-    move: (id, project) => call('mat:move', { id, project }),
+    move: (id, project, folder) => call('mat:move', { id, project, folder }),
+    folderAdd: (project, name) => call('mat:folderAdd', { project, name }),
+    folderDelete: (project, name) => call('mat:folderDelete', { project, name }),
     onProgress: on('mat:progress'),
   },
   browser: {

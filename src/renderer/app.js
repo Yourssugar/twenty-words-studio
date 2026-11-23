@@ -101,9 +101,10 @@ function toast(text, kind = '') {
   setTimeout(() => el.remove(), 4300);
 }
 
-function modal({ title, body, ok = 'Да', danger = false, wide = false }) {
+function modal({ title, body, ok = 'Да', danger = false, wide = false, single = false }) {
   return new Promise((resolve) => {
     $('modal-title').textContent = title;
+    $('modal-cancel').hidden = single; // single: одна кнопка, просто закрыть
     $('modal').querySelector('.modal-card').classList.toggle('is-wide', wide);
     const box = $('modal-body');
     box.innerHTML = '';
@@ -284,6 +285,38 @@ $('auth-form').addEventListener('submit', async (e) => {
   } finally {
     btn.disabled = false;
   }
+});
+
+// ---------- конфиденциальность и лицензии ----------
+
+async function openLegal(tab = 'privacy') {
+  const body = h('div', { class: 'legal' });
+  const content = h('div', { class: 'legal-body' });
+  const show = async (t) => {
+    content.innerHTML = '';
+    for (const b of tabs.children) b.classList.toggle('is-on', b.dataset.t === t);
+    try {
+      content.append(renderRulesText(await call(studio.app.legal(t))));
+      if (t === 'licenses') {
+        const pre = h('pre', { class: 'legal-pre' });
+        pre.textContent = await call(studio.app.legal('ofl'));
+        content.append(h('details', { class: 'legal-ofl' }, h('summary', { text: 'Полный текст SIL Open Font License 1.1' }), pre));
+      }
+    } catch (err) {
+      content.append(h('p', { class: 'muted', text: errText(err.code) }));
+    }
+    content.scrollTop = 0;
+  };
+  const tabs = h('div', { class: 'seg seg-inline' },
+    h('button', { class: 'seg-btn', type: 'button', text: 'Конфиденциальность', dataset: { t: 'privacy' }, onclick: () => show('privacy') }),
+    h('button', { class: 'seg-btn', type: 'button', text: 'Лицензии', dataset: { t: 'licenses' }, onclick: () => show('licenses') }));
+  body.append(tabs, content);
+  show(tab);
+  await modal({ title: 'Данные и лицензии', body, ok: 'Закрыть', wide: true, single: true });
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-legal]');
+  if (b) openLegal(b.dataset.legal);
 });
 
 $('auth-server-save').addEventListener('click', async () => {
@@ -895,7 +928,6 @@ async function loadAdmin() {
     if (typeof loadAdminAI === 'function') loadAdminAI();
     if (typeof loadAdminRules === 'function') loadAdminRules();
     if (S.me.founder) loadStorage();
-    if (S.me.founder) loadMatAccess();
   } catch (err) {
     toast(errText(err.code));
   }
@@ -944,36 +976,6 @@ async function loadStorage() {
 }
 $('storage-refresh').addEventListener('click', loadStorage);
 
-// Материалы: открыты ли проекты студии участникам или только общая папка.
-// Основатели и админы видят всё всегда; музыка студии в плеере играет у всех.
-async function loadMatAccess() {
-  const card = $('mat-access-card');
-  try {
-    const ov = await call(studio.materials.overview());
-    if (!ov.enabled) {
-      card.hidden = true;
-      return;
-    }
-    card.hidden = false;
-    const open = ov.projectsOpen !== false;
-    $('mat-access-open').checked = open;
-    $('mat-access-note').textContent = open
-      ? 'Сейчас участники видят все проекты и могут скачать любой файл. Снимите галочку, если в команде есть новые люди, которым пока рано.'
-      : 'Сейчас участники видят только общую папку. Основатели и админы видят всё. Музыка студии в плеере играет у всех.';
-  } catch {
-    card.hidden = true;
-  }
-}
-$('mat-access-open').addEventListener('change', async (e) => {
-  try {
-    await call(studio.materials.settings({ projectsOpen: e.target.checked }));
-    toast(e.target.checked ? 'Проекты студии открыты участникам.' : 'Участники теперь видят только общую папку.');
-  } catch (err) {
-    e.target.checked = !e.target.checked;
-    toast(errText(err.code));
-  }
-  loadMatAccess();
-});
 
 function showCode(label, code) {
   $('code-label').textContent = label;
@@ -1070,10 +1072,32 @@ function renderAdminUsers(users) {
       h('td', { text: u.name }),
       h('td', { class: 'mono', text: u.login }),
       h('td', { text: u.founder ? 'основатель' : u.role === 'admin' ? 'админ' : 'участник' }),
+      h('td', {}, matAccessCell(u, founder)),
       h('td', {}, status),
       h('td', {}, actions),
     ));
   }
+}
+
+// Проекты студии в Материалах: участнику открывает основатель, админы и основатели видят всегда.
+function matAccessCell(u, founder) {
+  if (u.founder || u.role === 'admin') return h('span', { class: 'muted small', text: 'всегда' });
+  const box = h('input', { type: 'checkbox', title: 'Видит проекты студии и может скачивать их файлы' });
+  box.checked = !!u.matProjects;
+  box.disabled = !founder;
+  const lbl = h('span', { class: 'small', text: box.checked ? 'видит' : 'нет' });
+  box.addEventListener('change', async () => {
+    try {
+      await call(studio.admin.matAccess(u.id, box.checked));
+      u.matProjects = box.checked;
+      lbl.textContent = box.checked ? 'видит' : 'нет';
+      toast(u.name + ': проекты студии ' + (box.checked ? 'открыты' : 'закрыты, видна только общая папка') + '.');
+    } catch (err) {
+      box.checked = !box.checked;
+      toast(errText(err.code));
+    }
+  });
+  return h('label', { class: 'check check-s' }, box, lbl);
 }
 
 function renderAdminInvites(invites) {

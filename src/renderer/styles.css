@@ -851,6 +851,25 @@ html.focus-mode .view-chat .side { display: none; }
 /* ---------- материалы ---------- */
 .mat-item.is-shared { border: 1px dashed var(--accent-edge); }
 .mat-item.is-shared .item-name { color: var(--accent); }
+.mat-fbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 22px 0; }
+.mat-ftile { position: relative; display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); min-width: 130px; max-width: 220px; }
+.mat-ftile-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; background: none; border: 0; color: var(--text); font: inherit; cursor: pointer; text-align: left; }
+.mat-ftile-name { font-weight: 600; font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mat-ftile:hover { border-color: var(--accent-edge); }
+.mat-ftile.is-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.mat-ftile.is-locked .mat-ftile-name { color: var(--accent); }
+.mat-ftile-x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 8px; font-size: 16px; }
+.mat-ftile-x:hover { color: var(--text); }
+.mat-ftile-add { justify-content: center; align-items: center; padding: 8px 14px; color: var(--muted); cursor: pointer; font: inherit; border-style: dashed; min-width: 0; }
+.mat-ftile-add:hover { color: var(--text); }
+.mat-head .btn-accent:disabled, #mat-tools .btn:disabled { opacity: .4; cursor: not-allowed; filter: grayscale(.6); }
+#admin-users td { vertical-align: middle; }
+#admin-users .check { margin: 0; align-items: center; }
+.legal { display: flex; flex-direction: column; gap: 12px; }
+.legal-body { max-height: 62vh; overflow-y: auto; padding-right: 8px; }
+.legal-pre { white-space: pre-wrap; font-size: 12px; line-height: 1.45; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.legal-ofl summary { cursor: pointer; color: var(--accent); margin: 8px 0; }
+.auth-legal { text-align: center; margin: 10px 0 0; }
 .mat-sep { padding: 10px 8px 4px; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
 .mat-note { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); margin: 12px 22px 0; }
 .mat-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }

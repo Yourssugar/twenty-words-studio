@@ -7,3 +7,6 @@ dist-tools/
 *.md
 !README.md
 pamyatka/
+src/legal/privacy.txt
+src/legal/OFL-1.1.txt
+src/legal/licenses.txt

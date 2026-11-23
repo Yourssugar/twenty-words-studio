@@ -63,6 +63,7 @@
         <button class="btn btn-accent btn-wide" id="auth-go" type="submit">Войти</button>
         <p class="error" id="auth-error" role="alert"></p>
       </form>
+      <p class="auth-legal small"><button class="b-link" type="button" data-legal="privacy">Как приложение хранит данные. Лицензии</button></p>
       <details class="auth-server">
         <summary>Сервер: <span id="auth-server-url"></span></summary>
         <div class="row">
@@ -278,12 +279,6 @@
       <div class="page">
         <h1>Админ</h1>
 
-        <div class="card" id="mat-access-card" hidden>
-          <h2>Материалы: кто видит проекты</h2>
-          <label class="check"><input type="checkbox" id="mat-access-open"><span>Участники видят и скачивают файлы проектов студии</span></label>
-          <p class="muted small" id="mat-access-note"></p>
-        </div>
-
         <div class="card" id="storage-card" hidden>
           <div class="row between"><h2>Место на сервере</h2><button class="btn btn-s" type="button" id="storage-refresh">Обновить</button></div>
           <div id="storage-body"></div>
@@ -318,7 +313,7 @@
         <div class="card">
           <h2>Люди</h2>
           <table class="table">
-            <thead><tr><th></th><th>Имя</th><th>Логин</th><th>Роль</th><th>Статус</th><th></th></tr></thead>
+            <thead><tr><th></th><th>Имя</th><th>Логин</th><th>Роль</th><th title="Видит ли человек проекты студии в Материалах. Общую папку видят все.">Проекты в материалах</th><th>Статус</th><th></th></tr></thead>
             <tbody id="admin-users"></tbody>
           </table>
         </div>
@@ -420,6 +415,10 @@
           <div class="field">
             <span>Сервер</span>
             <div class="row"><input id="set-server" spellcheck="false"><button class="btn" type="button" id="set-server-save">Сохранить</button></div>
+          </div>
+          <div class="row gap-s">
+            <button class="btn btn-s" type="button" data-legal="privacy">Конфиденциальность</button>
+            <button class="btn btn-s" type="button" data-legal="licenses">Лицензии</button>
           </div>
           <div class="row between">
             <span class="muted small" id="app-version"></span>

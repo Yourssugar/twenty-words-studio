@@ -32,7 +32,7 @@ let browser = null;
 let materials = null;
 let core = null;
 let radio = null;
-const MIN_SERVER = '0.9.3'; // сервер, который нужен этой версии приложения
+const MIN_SERVER = '0.9.4'; // сервер, который нужен этой версии приложения
 const names = new Map(); // id -> имя, для текста уведомлений
 const aiStreams = new Map(); // чат ассистента -> AbortController текущего ответа
 let myId = 0;
@@ -560,6 +560,7 @@ function registerIpc() {
   handle('subrooms:delete', (a) => client.request('DELETE', '/api/subrooms/' + need(a.id)));
   handle('tickets:list', () => client.request('GET', '/api/tickets'));
   handle('admin:storage', () => client.request('GET', '/api/admin/storage'));
+  handle('admin:matAccess', (a) => client.request('POST', '/api/admin/users/' + need(a.id) + '/materials', { open: a.open === true }));
 
   // Версия сервера: старый сервер не знает новых разделов, об этом лучше сказать сразу.
   handle('app:server', async () => {
@@ -605,7 +606,9 @@ function registerIpc() {
     return client.request('PATCH', '/api/materials/files/' + need(a.id), body);
   });
   handle('mat:fileDelete', (a) => client.request('DELETE', '/api/materials/files/' + need(a.id)));
-  handle('mat:move', (a) => client.request('POST', '/api/materials/files/' + need(a.id) + '/move', { project: need(a.project) }, { timeout: 120000 }));
+  handle('mat:move', (a) => client.request('POST', '/api/materials/files/' + need(a.id) + '/move', { project: need(a.project), folder: typeof a.folder === 'string' ? a.folder.slice(0, 60) : '' }, { timeout: 120000 }));
+  handle('mat:folderAdd', (a) => client.request('POST', '/api/materials/projects/' + need(a.project) + '/folders', { name: String(a.name || '').slice(0, 60) }));
+  handle('mat:folderDelete', (a) => client.request('DELETE', '/api/materials/projects/' + need(a.project) + '/folders?name=' + encodeURIComponent(String(a.name || '').slice(0, 60))));
   handle('tickets:add', (a) =>
     client.request('POST', '/api/tickets', {
       title: str(a.title, 200),
@@ -876,6 +879,12 @@ function registerIpc() {
   });
 
   handle('app:info', () => ({ version: app.getVersion(), dev: DEV }));
+  // Политика конфиденциальности и лицензии: тексты лежат в src/legal и едут вместе с приложением.
+  handle('app:legal', (a) => {
+    const file = { privacy: 'privacy.txt', licenses: 'licenses.txt', ofl: 'OFL-1.1.txt' }[a && a.doc];
+    if (!file) throw Object.assign(new Error('not_found'), { code: 'not_found' });
+    return fs.readFileSync(path.join(__dirname, '..', 'legal', file), 'utf8');
+  });
   handle('app:restart', () => {
     if (updater) updater.restart();
     return true;
